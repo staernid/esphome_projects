@@ -86,3 +86,9 @@ data:
 3. Compile and upload:
    ```bash
    esphome run c6.yaml
+
+## Homeassistant integration
+1. Install HACS for you home assistant if you haven't already
+2. Install universal-remote-card package in HACS (repo is: https://github.com/Nerwyn/universal-remote-card)
+3. Add a universal remote card to your dashboard, but replace the yaml with the one found in ./homeassistant/remote_card.yaml
+4. Enjoy a full-featured IR remote
