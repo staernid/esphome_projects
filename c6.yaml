@@ -1,0 +1,156 @@
+packages:
+  common: !include common.yaml
+
+esphome:
+  name: c6
+  friendly_name: ESPHome_C6
+
+api:
+  actions:
+    - action: send_nec
+      variables:
+        address: string # Assuming this is in hex format like "0xAAA2"
+        command: string # Likewise
+        command_repeats: int
+      then:
+        - remote_transmitter.transmit_nec:
+            address: !lambda |
+              auto addr_str = address;
+              if (addr_str.size() > 2 && addr_str[0] == '0' && addr_str[1] == 'x') {
+              // Remove the "0x" prefix
+              addr_str.erase(0, 2);
+              }
+              return std::stoi(addr_str, nullptr, 16);
+            command: !lambda |
+              auto cmd_str = command;
+              if (cmd_str.size() > 2 && cmd_str[0] == '0' && cmd_str[1] == 'x') {
+              // Remove the "0x" prefix
+              cmd_str.erase(0, 2);
+              }
+              return std::stoi(cmd_str, nullptr, 16);
+            command_repeats: !lambda "return command_repeats;"
+        - logger.log: "API: Sending some nec command"
+
+esp32:
+  board: esp32-c6-devkitc-1
+  flash_size: 4MB
+  variant: esp32c6
+  framework:
+    type: esp-idf
+
+# Built-in button on GPIO9
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO9
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Built-in Button"
+    filters:
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+
+sensor:
+  - platform: dht
+    pin: GPIO19
+    temperature:
+      name: "temperature"
+    humidity:
+      name: "Humidity"
+    update_interval: 15s
+
+switch:
+  - platform: gpio
+    id: onboard_led
+    pin:
+      number: GPIO2
+      mode: OUTPUT
+    restore_mode: ALWAYS_OFF
+
+light:
+  - platform: monochromatic
+    id: fairy_id
+    output: fairy
+    name: "Fairy Lights"
+    effects:
+      - random:
+      - strobe:
+      - flicker:
+
+remote_transmitter:
+  pin: GPIO13
+  carrier_duty_percent: 50%
+
+button:
+  - platform: template
+    name: Acer Power Button
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: 0x1308
+          command: 0x7887
+          command_repeats: 1
+  - platform: template
+    name: Acer Source Button
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: 0x1308
+          command: 0x7331
+          command_repeats: 1
+
+output:
+  - platform: ledc
+    id: fairy
+    pin: GPIO10
+
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+
+font:
+  - file: "assets/monacottf.otf"
+    id: my_font
+    size: 12
+
+display:
+  - platform: ssd1306_i2c
+    id: oled
+    model: "SSD1306 128x32"
+    address: 0x3C
+
+text:
+  - platform: template
+    name: "oled text"
+    optimistic: true
+    min_length: 0
+    max_length: 36
+    mode: text
+    on_value:
+      lambda: |-
+        auto disp = id(oled);
+        disp->clear();
+
+        constexpr int FONT_WIDTH = 7; // 6 + 1 space
+        constexpr int SCREEN_WIDTH = 128;
+        constexpr int SCREEN_HEIGHT = 32;
+        constexpr int CHAR_PER_LINE = SCREEN_WIDTH / FONT_WIDTH;
+
+        if (x.empty()) {
+          return;
+        }
+
+        if (x.length() <= CHAR_PER_LINE) {
+          // Center single line vertically and horizontally
+          int offset_x = (SCREEN_WIDTH - static_cast<int>(x.length()) * FONT_WIDTH) / 2;
+          int offset_y = (SCREEN_HEIGHT - 8) / 2; // assuming 8px font height
+          disp->printf(offset_x, offset_y, id(my_font), "%s", x.c_str());
+        } else {
+          // Split into two lines, truncating if needed
+          std::string line1 = x.substr(0, CHAR_PER_LINE);
+          std::string line2 = x.substr(CHAR_PER_LINE, CHAR_PER_LINE);
+
+          int offset_x1 = (SCREEN_WIDTH - static_cast<int>(line1.length()) * FONT_WIDTH) / 2;
+          int offset_x2 = (SCREEN_WIDTH - static_cast<int>(line2.length()) * FONT_WIDTH) / 2;
+
+          disp->printf(offset_x1, 0, id(my_font), "%s", line1.c_str());
+          disp->printf(offset_x2, 16, id(my_font), "%s", line2.c_str());
+        }

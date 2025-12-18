@@ -1,0 +1,88 @@
+substitutions:
+  devicename: esp-cam
+  friendly_name: espcam
+
+esphome:
+  name: $devicename
+
+esp32:
+  board: esp32cam
+  framework:
+    type: arduino
+
+esp32_camera:
+  name: $friendly_name
+  external_clock:
+    pin: GPIO0
+    frequency: 10MHz
+  i2c_pins:
+    sda: GPIO26
+    scl: GPIO27
+  data_pins: [GPIO5, GPIO18, GPIO19, GPIO21, GPIO36, GPIO39, GPIO34, GPIO35]
+  vsync_pin: GPIO25
+  href_pin: GPIO23
+  pixel_clock_pin: GPIO22
+  power_down_pin: GPIO32
+  # Image/Video settings, https://esphome.io/components/esp32_camera.html
+  max_framerate: 10 fps # default: 10 fps, max 60
+  aec2: True
+  idle_framerate: 0.2 fps # default: 0.1 fps - framerate for 'picture' in HA dashboard
+  resolution: 800x600
+  jpeg_quality: 10
+  vertical_flip: False
+  horizontal_mirror: False
+  contrast: 0 # default: 0, variable -2 to 2
+  brightness: 0 # default: 0, variable -2 to 2
+  saturation: 0 # default: 0, variable -2 to 2
+
+# Server video/pictures, https://esphome.io/components/esp32_camera_web_server.html
+
+esp32_camera_web_server:
+  - port: 8080
+    mode: stream
+  - port: 8081
+    mode: snapshot
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+output:
+  #flashlight
+  - platform: gpio
+    pin: GPIO4
+    id: gpio_4
+  #statuslight led 33 for wifi connect
+  - platform: gpio
+    pin:
+      number: GPIO33
+      inverted: True
+    id: gpio_33
+
+light:
+  #flashlight
+  - platform: binary
+    output: gpio_4
+    name: $friendly_name light
+  #statuslight led 33 for wifi connect
+  - platform: binary
+    output: gpio_33
+    name: $friendly_name wifi light state
+
+sensor:
+  - platform: wifi_signal
+    name: $friendly_name Wifi signal
+    update_interval: 10s
+  - platform: uptime
+    name: $friendly_name Uptime
+
+text_sensor:
+  - platform: version
+    name: $friendly_name ESPHome Version
+  - platform: wifi_info
+    ssid:
+      name: $friendly_name WiFi
+
+switch:
+  - platform: restart
+    name: $friendly_name restart
