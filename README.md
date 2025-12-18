@@ -53,8 +53,13 @@ graph TD
 ### 4. Infrared (IR) Control
 The device acts as an IR remote transmitter on `GPIO13`.
 - **Predefined Buttons**:
-  - Acer Projector Power (`Address: 0x1308`, `Command: 0x7887`)
-  - Acer Projector Source (`Address: 0x1308`, `Command: 0x7331`)
+  - Acer Projector Power (`Address: 0x1308`, `Command: 0x7887`)  - platform: template
+    name: Acer Source Button
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: 0x1308
+          command: 0x7331
+          command_repeats: 1
 - **Custom API Action**: Exposes a `send_nec` action to Home Assistant, allowing you to send arbitrary NEC codes by passing `address` and `command` strings (supports hex format like `0x1234`).
 
 ## 📝 Configuration Details

@@ -89,13 +89,6 @@ button:
           address: 0x1308
           command: 0x7887
           command_repeats: 1
-  - platform: template
-    name: Acer Source Button
-    on_press:
-      - remote_transmitter.transmit_nec:
-          address: 0x1308
-          command: 0x7331
-          command_repeats: 1
 
 output:
   - platform: ledc

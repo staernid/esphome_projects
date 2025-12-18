@@ -1,0 +1,138 @@
+type: custom:android-tv-card
+remote_id: null
+title: Acer Projector
+rows:
+  - - source
+    - power
+    - 3d
+  - - null
+    - up
+    - null
+  - - left
+    - ok
+    - right
+  - - null
+    - down
+    - null
+  - - back
+    - null
+    - menu
+custom_actions:
+  - type: button
+    name: source
+    tap_action:
+      action: call-service
+      service: esphome.c6_send_nec
+      data:
+        address: "0x1308"
+        command: "0x738C"
+        command_repeats: 1
+    icon: mdi:video-input-hdmi
+    styles: |-
+      :host {
+        --icon-color: #5599ff;
+      }
+  - type: button
+    name: power
+    tap_action:
+      action: call-service
+      service: esphome.c6_send_nec
+      data:
+        address: "0x1308"
+        command: "0x7887"
+        command_repeats: 1
+    icon: mdi:power
+    styles: |-
+      :host {
+        --icon-color: #ff5555;
+      }
+  - type: button
+    name: 3d
+    tap_action:
+      action: call-service
+      service: esphome.c6_send_nec
+      data:
+        address: "0x1308"
+        command: "0x758A"
+        command_repeats: 1
+    icon: mdi:video-3d
+    styles: |-
+      :host {
+        --icon-color: #aaffaa;
+      }
+  - type: button
+    name: up
+    tap_action:
+      action: call-service
+      service: esphome.c6_send_nec
+      data:
+        address: "0x1308"
+        command: "0x7D82"
+        command_repeats: 1
+    hold_action:
+      action: repeat
+    icon: mdi:chevron-up
+  - type: button
+    name: down
+    tap_action:
+      action: call-service
+      service: esphome.c6_send_nec
+      data:
+        address: "0x1308"
+        command: "0x7A85"
+        command_repeats: 1
+    hold_action:
+      action: repeat
+    icon: mdi:chevron-down
+  - type: button
+    name: left
+    tap_action:
+      action: call-service
+      service: esphome.c6_send_nec
+      data:
+        address: "0x1308"
+        command: "0x7D83"
+        command_repeats: 1
+    hold_action:
+      action: repeat
+    icon: mdi:chevron-left
+  - type: button
+    name: right
+    tap_action:
+      action: call-service
+      service: esphome.c6_send_nec
+      data:
+        address: "0x1308"
+        command: "0x7E81"
+        command_repeats: 1
+    hold_action:
+      action: repeat
+    icon: mdi:chevron-right
+  - type: button
+    name: ok
+    tap_action:
+      action: call-service
+      service: esphome.c6_send_nec
+      data:
+        address: "0x1308"
+        command: "0x3DC2"
+        command_repeats: 1
+    icon: mdi:circle-medium
+  - type: button
+    name: back
+    tap_action:
+      action: call-service
+      service: esphome.c6_send_nec
+      data:
+        address: "0x1308"
+        command: "0x3EC1"
+    icon: mdi:keyboard-backspace
+  - type: button
+    name: menu
+    tap_action:
+      action: call-service
+      service: esphome.c6_send_nec
+      data:
+        address: "0x1308"
+        command: "0x7B84"
+    icon: mdi:menu
