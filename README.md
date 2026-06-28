@@ -1,94 +1,99 @@
-# ESPHome C6 Project
+# ESPHome Modular Base Configurations
 
-This project configures an **ESP32-C6** (specifically the `esp32-c6-devkitc-1`) using ESPHome. It features environmental sensing, an OLED display, IR remote control capabilities, and integration with Home Assistant.
+This repository contains reusable, modular ESPHome configurations for **ESP32-C3** and **ESP32-C6** microcontrollers. It uses ESPHome's package system to separate shared infrastructure (Wi-Fi, API, OTA, Logger, Time) from hardware-specific features.
 
-## 🏗 Architecture Overview
+---
 
-The configuration is split into a modular structure:
-- [`common.yaml`](common.yaml): Contains base networking, security, and system-level configurations.
-- [`c6.yaml`](c6.yaml): Contains device-specific hardware mappings and logic for the ESP32-C6.
+## 📁 Repository Structure
 
-```mermaid
-graph TD
-    C6[c6.yaml] -->|includes| COM[common.yaml]
-    
-    subgraph "System Services"
-        COM --> WiFi[WiFi & AP]
-        COM --> API[HA API Encryption]
-        COM --> OTA[Over-the-Air Updates]
-        COM --> Web[Web Server Port 80]
-        COM --> Time[HA Time Sync]
-    end
-
-    subgraph "Hardware Components"
-        C6 --> DHT[DHT Sensor - GPIO19]
-        C6 --> OLED[SSD1306 OLED - I2C]
-        C6 --> IR[IR Transmitter - GPIO13]
-        C6 --> LED[Fairy Lights - GPIO10]
-        C6 --> BTN[Built-in Button - GPIO9]
-    end
+```text
+.
+├── common.yaml    # Core shared services (Wi-Fi, Home Assistant API, OTA, Logger, HA Time)
+├── c3.yaml        # ESP32-C3 SuperMini base configuration
+├── c6.yaml        # ESP32-C6 DevKitC-1 display & weather engine configuration
+└── secrets.yaml   # Local Wi-Fi and API credentials (not committed to version control)
 ```
 
-## 🛠 Features & Hardware Mapping
+---
 
-### 1. Connectivity & System
-- **WiFi**: Configured with a fallback hotspot (Captive Portal).
-- **Web Server**: Enabled on port 80 for local control.
-- **Time**: Synchronized via Home Assistant (`ha_time`).
-- **Security**: Encrypted API and password-protected OTA/Web interface.
+## 🧱 Local Architecture
 
-### 2. Sensors & Inputs
-| Component | Pin | Description |
-| :--- | :--- | :--- |
-| **DHT Sensor** | `GPIO19` | Monitors Temperature and Humidity every 15s. |
-| **Binary Sensor** | `GPIO9` | Built-in button (inverted, with 10ms debouncing). |
+Both `c3.yaml` and `c6.yaml` import `common.yaml` locally using ESPHome packages:
 
-### 3. Outputs & Displays
-- **OLED Display**: SSD1306 (128x32) on I2C (`SDA: GPIO4`, `SCL: GPIO5`).
-  - Supports dynamic text rendering via a template text entity.
-  - Automatically centers text or splits it into two lines if it exceeds 18 characters.
-- **Fairy Lights**: Monochromatic light on `GPIO10` (via LEDC PWM) with Random, Strobe, and Flicker effects.
-- **Status LED**: Onboard LED mapped to `GPIO2`.
-
-### 4. Infrared (IR) Control
-The device acts as an IR remote transmitter on `GPIO13`.
-- **Predefined Buttons**:
-  - Acer Projector Power (`Address: 0x1308`, `Command: 0x7887`)  - platform: template
-    name: Acer Source Button
-    on_press:
-      - remote_transmitter.transmit_nec:
-          address: 0x1308
-          command: 0x7331
-          command_repeats: 1
-- **Custom API Action**: Exposes a `send_nec` action to Home Assistant, allowing you to send arbitrary NEC codes by passing `address` and `command` strings (supports hex format like `0x1234`).
-
-## 📝 Configuration Details
-
-### OLED Text Logic
-The display logic in [`c6.yaml`](c6.yaml:121) uses a custom lambda to handle text input:
-- **Single Line**: If $\le 18$ characters, the text is centered both horizontally and vertically.
-- **Multi-line**: If $> 18$ characters, it wraps the text to a second line.
-- **Font**: Uses `assets/monacottf.otf` at size 12.
-
-### Custom API Action
-You can trigger IR commands from Home Assistant services:
 ```yaml
-service: esphome.c6_send_nec
-data:
-  address: "0x1308"
-  command: "0x7887"
-  command_repeats: 1
+substitutions:
+  name: "c3"
+  friendly_name: "c3"
+
+packages:
+  common: !include common.yaml
 ```
 
-## 🚀 Getting Started
-1. Ensure your `secrets.yaml` contains the required keys (`wifi_ssid`, `wifi_password`, `encryption_key`, etc.).
-2. Connect your ESP32-C6 DevKit.
-3. Compile and upload:
-   ```bash
-   esphome run c6.yaml
+- **`common.yaml`**: Standardizes network connection, security encryption keys, logging, and real-time clock synchronization.
+- **Device YAMLs**: Define board hardware specs, pin definitions, sensors, and custom logic while inheriting the base services.
 
-## Homeassistant integration
-1. Install HACS for you home assistant if you haven't already
-2. Install universal-remote-card package in HACS (repo is: https://github.com/Nerwyn/universal-remote-card)
-3. Add a universal remote card to your dashboard, but replace the yaml with the one found in ./homeassistant/remote_card.yaml
-4. Enjoy a full-featured IR remote
+---
+
+## 🌐 Remote Package Guide: Reusing Configurations Across Repositories
+
+If you have multiple devices (e.g., `c3-0`, `c3-1`, `c6-bedroom`) and want to keep your base hardware configs central in this repository, you can create lightweight YAMLs in external projects or repositories that reference this Git repository directly.
+
+### 1. Basic Setup (`c3-0.yaml`)
+
+Create a new YAML file for your specific device and use ESPHome's remote package syntax:
+
+```yaml
+# c3-0.yaml (e.g., in a separate device repo or directory)
+substitutions:
+  name: "c3-0"
+  friendly_name: "Living Room C3"
+
+packages:
+  base_c3:
+    url: https://github.com/your-username/your-esphome-repo
+    ref: main            # Git branch, tag, or commit hash
+    files: [c3.yaml]     # Imports c3.yaml (which automatically fetches common.yaml)
+    refresh: 1d          # Cache refresh interval
+
+# (Optional) Device-specific overrides or extra sensors
+sensor:
+  - platform: dht
+    pin: GPIO0
+    temperature:
+      name: "Living Room Temperature"
+    humidity:
+      name: "Living Room Humidity"
+    update_interval: 15s
+```
+
+### 2. Private Repositories
+
+If this base repository is private, authenticate using SSH keys:
+
+```yaml
+packages:
+  base_c3:
+    url: git@github.com:your-username/your-esphome-repo.git
+    ref: main
+    files: [c3.yaml]
+```
+
+### 3. How Overrides Work
+
+When ESPHome compiles the target device (`c3-0.yaml`):
+1. The local `substitutions:` block overrides `${name}` and `${friendly_name}` everywhere in `c3.yaml` and `common.yaml` (including fallback AP names and entity IDs).
+2. Any extra components defined in the child file (like extra sensors or modified GPIO pins) are seamlessly merged into the base configuration.
+
+---
+
+## 🔑 Secrets Configuration
+
+Ensure your local `secrets.yaml` includes the required keys referenced by `common.yaml`:
+
+```yaml
+wifi_ssid: "Your_WiFi_SSID"
+wifi_password: "Your_WiFi_Password"
+fallback_ap_password: "Your_Fallback_AP_Password"
+ota_password: "Your_OTA_Update_Password"
+encryption_key: "Your_Home_Assistant_API_Key"
+```

@@ -1,25 +1,72 @@
+# Board: ESP32-C3 Super Mini (Generic)
+# Definition: definitions/boards/esp32-c3-supermini/manifest.yaml
+
+substitutions:
+  name: "c3"
+  friendly_name: "c3"
+
 packages:
   common: !include common.yaml
 
 esphome:
-  name: c3-0
-  friendly_name: c3-0
-  platformio_options:
-    board_build.flash_mode: dio
+  name: ${name}
+  friendly_name: ${friendly_name}
 
 esp32:
-  board: seeed_xiao_esp32c3
-  #flash_size: 4MB
   variant: esp32c3
+  flash_size: 4MB
   framework:
     type: esp-idf
 
-remote_receiver:
-  pin:
-    number: GPIO5
-    inverted: true
-    mode:
-      input: true
-      pullup: true
-  dump: all
-  rmt_channel: 3
+api:
+  actions:
+    - action: send_nec
+      variables:
+        address: string # e.g., "0xAAA2"
+        command: string # e.g., "0x7887"
+        command_repeats: int
+      then:
+        - remote_transmitter.transmit_nec:
+            address: !lambda |
+              return std::strtoul(address.c_str(), nullptr, 16);
+            command: !lambda |
+              return std::strtoul(command.c_str(), nullptr, 16);
+            command_repeats: !lambda "return command_repeats;"
+        - logger.log: "API: Sending some nec command"
+
+sensor:
+  - platform: dht
+    pin: GPIO0
+    temperature:
+      name: "temperature"
+    humidity:
+      name: "Humidity"
+    update_interval: 15s
+
+light:
+  - platform: monochromatic
+    id: fairy_id
+    output: fairy
+    name: "Fairy Lights"
+    effects:
+      - random:
+      - strobe:
+      - flicker:
+
+remote_transmitter:
+  pin: GPIO4
+  carrier_duty_percent: 50
+
+button:
+  - platform: template
+    name: Acer Power Button
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: 0x1308
+          command: 0x7887
+          command_repeats: 1
+
+output:
+  - platform: ledc
+    id: fairy
+    pin: GPIO5
