@@ -1,0 +1,62 @@
+# Board: ESP32-C6 DevKitC-1 (Espressif) - Heavy Animated Weather Engine Target
+substitutions:
+  name: "c6-heavy"
+  friendly_name: "c6-heavy"
+
+  # Home Assistant Entity IDs
+  inside_temp_entity: "sensor.c6_inside_temp"
+  weather_entity: "weather.forecast_home"
+
+packages:
+  common: !include common.yaml
+  lvgl_base: !include packages/lvgl_base.yaml
+  c6_sensors: !include packages/c6/c6_sensors.yaml
+  c6_sensors_heavy: !include packages/c6/c6_sensors_heavy.yaml
+  c6_controls: !include packages/c6/c6_controls.yaml
+  c6_peripherals: !include packages/c6/c6_peripherals.yaml
+  c6_display_heavy: !include packages/c6/c6_display_heavy.yaml
+
+globals:
+  - id: ui_mode
+    type: int
+    initial_value: '3' # 1: Auto Showcase (Screensaver), 2: Manual Showcase (Interactive Knob), 3: Passive Weather (Unified Live Screen)
+  - id: weather_mode
+    type: int
+    initial_value: '1' # 1: Sunny, 2: Clear Night, 3: Cloudy, 4: Partly Cloudy, 5: Rainy, 6: Snowy, 7: Lightning, 8: Windy/Fog
+  - id: anim_step
+    type: uint32_t
+    initial_value: '0'
+  - id: display_contrast
+    type: float
+    initial_value: '0.0'
+  - id: last_indoor_temp
+    type: float
+    initial_value: '0.0'
+  - id: last_outdoor_temp
+    type: float
+    initial_value: '0.0'
+  - id: osd_wind_feedback
+    type: bool
+    initial_value: 'false'
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  includes:
+    - include
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: apply_ui_mode
+
+esp32:
+  variant: esp32c6
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+i2c:
+  - scl: 7
+    sda: 6
+    id: i2c_1
+    frequency: 800khz # Overclocked for smooth 60 FPS transitions

@@ -35,7 +35,7 @@ class BoidRenderer {
   void update(uint32_t step, int mode, float continuous_wind) {
     if (!initialized) init();
 
-    if (mode != 1 && mode != 3 && mode != 4 && mode != 8) return;
+    if (mode != 1 && mode != 3 && mode != 4) return;
 
     for (int i = 0; i < NUM_BOIDS; i++) {
       Boid &b = boids[i];

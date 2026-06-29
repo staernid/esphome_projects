@@ -1,0 +1,382 @@
+substitutions:
+  name: "c6-sim-heavy"
+  friendly_name: "c6 Simulation Heavy"
+
+  inside_temp_entity: "sensor.c6_inside_temp"
+  weather_entity: "weather.forecast_home"
+
+logger:
+
+packages:
+  lvgl_base: !include packages/lvgl_base.yaml
+
+# Simulated time for host clock display
+time:
+  - platform: host
+    id: ha_time
+
+globals:
+  - id: ui_mode
+    type: int
+    initial_value: '3' # 1: Auto Showcase, 2: Manual Showcase, 3: Passive Weather, 4: Matrix Diagnostics
+  - id: weather_mode
+    type: int
+    initial_value: '1' # 1: Sunny, 2: Clear Night, 3: Cloudy, 4: Partly Cloudy, 5: Rainy, 6: Snowy, 7: Lightning, 8: Windy/Fog
+  - id: anim_step
+    type: uint32_t
+    initial_value: '0'
+  - id: display_contrast
+    type: float
+    initial_value: '0.0'
+  - id: last_indoor_temp
+    type: float
+    initial_value: '0.0'
+  - id: last_outdoor_temp
+    type: float
+    initial_value: '0.0'
+  - id: osd_wind_feedback
+    type: bool
+    initial_value: 'false'
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  includes:
+    - include
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: apply_ui_mode
+
+host:
+
+# Dummy simulated sensors for testing UI without Home Assistant server
+sensor:
+  - platform: template
+    id: inside_temperature
+    name: "Simulated Inside Temp"
+    lambda: 'return 21.5f;'
+  - platform: template
+    id: outside_temperature
+    name: "Simulated Outside Temp"
+    lambda: 'return 18.2f;'
+  - platform: template
+    id: ha_wind_speed
+    name: "Simulated Wind Speed"
+    lambda: 'return 5.0f;'
+    on_value:
+      then:
+        - lambda: |-
+            weather::global_weather_engine.set_ha_wind_speed(x);
+  - platform: template
+    id: ha_precipitation_rate
+    name: "Simulated Precipitation Rate"
+    lambda: 'return 0.0f;'
+    on_value:
+      then:
+        - lambda: |-
+            weather::global_weather_engine.set_ha_precipitation_rate(x);
+
+binary_sensor:
+  - platform: sdl
+    name: "Key M (Mode Button)"
+    id: key_mode_btn
+    key: SDLK_m
+    on_press:
+      then:
+        - lambda: |-
+            if (id(ui_mode) == 6) id(ui_mode) = 1;
+            else id(ui_mode) = (id(ui_mode) % 5) + 1;
+            ESP_LOGI("button", "Cycled UI Mode to: %d", id(ui_mode));
+        - script.execute: apply_ui_mode
+
+  - platform: sdl
+    name: "Key D (Matrix Diagnostics Toggle)"
+    id: key_diag_btn
+    key: SDLK_d
+    on_press:
+      then:
+        - lambda: |-
+            if (id(ui_mode) == 6) {
+              id(ui_mode) = 3;
+            } else {
+              id(ui_mode) = 6;
+            }
+            ESP_LOGI("button", "Toggled Matrix Diagnostics Mode: %d", id(ui_mode));
+        - script.execute: apply_ui_mode
+
+  - platform: sdl
+    name: "Key W (Weather Button)"
+    id: key_weather_btn
+    key: SDLK_w
+    on_press:
+      then:
+        - lambda: |-
+            id(weather_mode) = (id(weather_mode) % 10) + 1;
+            weather::global_weather_engine.reset_manual_wind();
+            ESP_LOGI("button", "Cycled weather effect to: %d (%s)", id(weather_mode), weather::get_mode_name(id(weather_mode)));
+            if (id(ui_mode) != 2) {
+              id(ui_mode) = 2;
+              id(apply_ui_mode).execute();
+            } else {
+              id(show_osd).execute(weather::get_mode_name(id(weather_mode)));
+            }
+
+  - platform: sdl
+    name: "Key C (Simulated Wi-Fi CSI Motion)"
+    id: key_csi_btn
+    key: SDLK_c
+    on_press:
+      then:
+        - lambda: |-
+            weather::global_weather_engine.get_csi().process_csi_frame(2.8f, 1.4f);
+            ESP_LOGI("csi", "Simulated Wi-Fi CSI Motion Motion Triggered!");
+            id(show_osd).execute("CSI Motion Detected!");
+
+  - platform: sdl
+    name: "Key Space (Encoder Click)"
+    id: key_encoder_click
+    key: SDLK_SPACE
+    on_press:
+      then:
+        - lambda: |-
+            ESP_LOGI("button", "Simulated knob button press");
+            id(show_osd).execute("Knob Click");
+
+  - platform: sdl
+    name: "Key Right (Knob Clockwise)"
+    id: key_knob_cw
+    key: SDLK_RIGHT
+    on_press:
+      then:
+        - lambda: |-
+            if (id(ui_mode) != 2) {
+              id(ui_mode) = 2;
+              id(apply_ui_mode).execute();
+            } else {
+              weather::global_weather_engine.adjust_manual_wind(1.0f);
+              float current_w = weather::global_weather_engine.get_target_wind();
+              id(show_osd).execute(str_sprintf("Wind: %+.1f", current_w));
+            }
+
+  - platform: sdl
+    name: "Key Left (Knob Counter-Clockwise)"
+    id: key_knob_ccw
+    key: SDLK_LEFT
+    on_press:
+      then:
+        - lambda: |-
+            if (id(ui_mode) != 2) {
+              id(ui_mode) = 2;
+              id(apply_ui_mode).execute();
+            } else {
+              weather::global_weather_engine.adjust_manual_wind(-1.0f);
+              float current_w = weather::global_weather_engine.get_target_wind();
+              id(show_osd).execute(str_sprintf("Wind: %+.1f", current_w));
+            }
+
+text_sensor:
+  - platform: template
+    id: weather_condition
+    name: "Simulated Weather Condition"
+    lambda: 'return std::string("sunny");'
+  - platform: template
+    id: sun_state
+    name: "Simulated Sun State"
+    lambda: 'return std::string("above_horizon");'
+
+display:
+  - platform: sdl
+    id: display_sdl
+    dimensions:
+      width: 128
+      height: 64
+    window_options:
+      resizable: true
+      borderless: false
+      always_on_top: false
+      fullscreen: false
+      skip_taskbar: false
+    auto_clear_enabled: false
+    update_interval: 16ms
+    sdl_options: "-I/usr/include/SDL2 -D_GNU_SOURCE=1 -D_REENTRANT -lSDL2"
+
+lvgl:
+  id: my_lvgl
+  displays: display_sdl
+  update_interval: 16ms
+  bg_color: black
+  theme:
+    dark_mode: true
+
+  top_layer:
+    widgets:
+      - canvas:
+          id: weather_canvas
+          width: 128
+          height: 64
+          transparent: true
+      - label:
+          id: osd_label
+          text: ""
+          styles: style_osd
+          align: center
+          hidden: true
+
+  pages:
+    - id: page_main
+      widgets:
+        - label:
+            text: "IN/OUT"
+            styles: style_small
+            align: top_left
+            x: 6
+            y: 8
+        - label:
+            text: "21.5°C"
+            id: indoor_temp_label
+            styles: style_medium
+            align: top_left
+            x: 6
+            y: 21
+        - label:
+            text: "18.2°C"
+            id: outdoor_temp_label
+            styles: style_medium
+            align: top_left
+            x: 6
+            y: 38
+        - label:
+            text: "12:00"
+            id: clock_label
+            styles: style_large
+            align: top_right
+            x: -6
+            y: 22
+
+    - id: page_blank
+
+    # --- MATRIX SYSTEM DIAGNOSTICS PAGE (Mode 4) ---
+    - id: page_diagnostics
+      widgets:
+        - label:
+            text: "SYS DIAGNOSTICS"
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 2
+        - label:
+            text: "FPS: --  CPU: --%"
+            id: diag_fps_cpu_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 16
+        - label:
+            text: "HEAP: --- KB"
+            id: diag_heap_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 29
+        - label:
+            text: "RSSI: --- dBm"
+            id: diag_rssi_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 42
+        - label:
+            text: "UP  : --:--:--"
+            id: diag_uptime_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 54
+
+interval:
+  # Telemetry refresh interval (Mode 6: Matrix Diagnostics)
+  - interval: 250ms
+    then:
+      - lambda: |-
+          if (id(ui_mode) != 6) return;
+      - lvgl.label.update:
+          id: diag_fps_cpu_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("FPS:%.1f CPU:%.0f%%", diag.get_fps(), diag.get_cpu_load());
+      - lvgl.label.update:
+          id: diag_heap_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("HEAP:%.1f KB free", diag.get_free_heap_kb());
+      - lvgl.label.update:
+          id: diag_rssi_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("RSSI: %d dBm", diag.get_wifi_rssi());
+      - lvgl.label.update:
+          id: diag_uptime_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("UP  : %s", diag.get_formatted_uptime().c_str());
+
+  - interval: 32ms
+    then:
+      - lambda: |-
+          id(anim_step)++;
+          weather::global_weather_engine.update(id(anim_step), id(weather_mode));
+          if (id(ui_mode) == 4) {
+            lv_layer_t layer;
+            lv_canvas_init_layer(id(weather_canvas), &layer);
+            lv_canvas_fill_bg(id(weather_canvas), lv_color_make(0, 0, 0), LV_OPA_TRANSP);
+            weather::global_weather_engine.get_sparklines().render(&layer, id(anim_step));
+            lv_canvas_finish_layer(id(weather_canvas), &layer);
+          } else if (id(ui_mode) == 5) {
+            lv_layer_t layer;
+            lv_canvas_init_layer(id(weather_canvas), &layer);
+            lv_canvas_fill_bg(id(weather_canvas), lv_color_make(0, 0, 0), LV_OPA_TRANSP);
+            weather::global_weather_engine.get_telemetry().render(&layer, id(anim_step));
+            lv_canvas_finish_layer(id(weather_canvas), &layer);
+          } else {
+            weather::global_weather_engine.render(id(weather_canvas), id(anim_step), id(weather_mode));
+          }
+
+script:
+  - id: show_osd
+    mode: restart
+    parameters:
+      message: string
+    then:
+      - lvgl.label.update:
+          id: osd_label
+          text: !lambda 'return message;'
+      - lvgl.widget.show: osd_label
+      - delay: 1s
+      - lvgl.widget.hide: osd_label
+
+  - id: apply_ui_mode
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return id(ui_mode) == 1 || id(ui_mode) == 2 || id(ui_mode) == 4 || id(ui_mode) == 5;'
+          then:
+            - lvgl.page.show: page_blank
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(ui_mode) == 6;'
+                then:
+                  - lvgl.page.show: page_diagnostics
+                else:
+                  - lvgl.page.show: page_main
+      - script.execute:
+          id: show_osd
+          message: !lambda |-
+            if (id(ui_mode) == 1) return "Auto Showcase";
+            if (id(ui_mode) == 2) return str_sprintf("Manual: %s", weather::get_mode_name(id(weather_mode)));
+            if (id(ui_mode) == 4) return "24h Forecast";
+            if (id(ui_mode) == 5) return "Environmental";
+            if (id(ui_mode) == 6) return "Matrix Diagnostics";
+            return "Passive Weather";

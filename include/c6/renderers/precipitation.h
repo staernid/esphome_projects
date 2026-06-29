@@ -77,9 +77,13 @@ class PrecipitationRenderer {
 
         int x2 = px + dx_total;
         int y2 = py + dy;
-        if (y2 >= 56 && x2 >= 0 && x2 < 128) {
+        if (y2 >= 58 && x2 >= 0 && x2 < 128) {
           int splash_w = std::max(3, (int)roundf(3.0f * precip_mult));
           DrawingUtils::draw_rect(layer, x2 - 1, 62, splash_w, 1, 0, true);
+          // Dynamic upward splash droplet arcs
+          DrawingUtils::draw_pixel(layer, x2 - 2, 60, true);
+          DrawingUtils::draw_pixel(layer, x2 + splash_w + 1, 60, true);
+          DrawingUtils::draw_pixel(layer, x2 + (splash_w / 2), 59, true);
         }
       } else {
         int cpx = std::max(0, std::min(127, px));
@@ -94,10 +98,12 @@ class LightningRenderer {
  public:
   int lightning_flash = 0;
   float lightning_x = 64.0f;
+  int strike_seed = 0;
 
   void trigger_lightning() {
-    lightning_flash = 2; // ~60ms sharp flash
+    lightning_flash = 12; // ~380ms stylized multi-phase strike
     lightning_x = 25.0f + (fast_rand() % 75);
+    strike_seed = fast_rand();
   }
 
   void update(uint32_t step, int mode) {
@@ -114,18 +120,102 @@ class LightningRenderer {
 
   void render(lv_layer_t *layer) const {
     if (lightning_flash > 0) {
-      int lx = std::max(10, std::min(115, (int)lightning_x));
-      DrawingUtils::draw_line(layer, lx, 12, lx + 4, 24, true);
-      DrawingUtils::draw_line(layer, lx + 4, 24, lx - 2, 38, true);
-      DrawingUtils::draw_line(layer, lx - 2, 38, lx + 5, 54, true);
-      DrawingUtils::draw_line(layer, lx + 4, 24, lx + 10, 34, true);
-      DrawingUtils::draw_line(layer, lx - 2, 38, lx - 7, 46, true);
+      int lx = std::max(15, std::min(110, (int)lightning_x));
+      
+      // Dynamic jitter during re-strike flickering phases (phase 8..5)
+      int jitter = (lightning_flash >= 5 && lightning_flash <= 8 && (lightning_flash % 2 == 0)) ? 2 : 0;
+
+      int x1 = lx + jitter, y1 = 6;
+      int x2 = lx + ((strike_seed % 11) - 5) - jitter, y2 = 22;
+      int x3 = x2 + (((strike_seed / 7) % 15) - 7) + jitter, y3 = 38;
+      int x4 = x3 + (((strike_seed / 13) % 11) - 5), y4 = 58;
+
+      // Render main bolt trunk
+      DrawingUtils::draw_line(layer, x1, y1, x2, y2, true);
+      DrawingUtils::draw_line(layer, x2, y2, x3, y3, true);
+      DrawingUtils::draw_line(layer, x3, y3, x4, y4, true);
+
+      // Bold core during initial heavy impact (phase 12..7)
+      if (lightning_flash >= 7) {
+        DrawingUtils::draw_line(layer, x1 + 1, y1, x2 + 1, y2, true);
+        DrawingUtils::draw_line(layer, x2 + 1, y2, x3 + 1, y3, true);
+      }
+
+      // Side-fork branches (flickers in secondary phase)
+      if (lightning_flash >= 4 && (lightning_flash % 2 != 0 || lightning_flash >= 8)) {
+        DrawingUtils::draw_line(layer, x2, y2, x2 + 8, y2 + 10, true);
+        DrawingUtils::draw_line(layer, x2 + 8, y2 + 10, x2 + 12, y2 + 14, true);
+        DrawingUtils::draw_line(layer, x3, y3, x3 - 9, y3 + 12, true);
+      }
+
+      // Ground impact sparks exploding outwards
+      DrawingUtils::draw_rect(layer, x4 - 3, 61, 7, 1, 0, true);
+      DrawingUtils::draw_pixel(layer, x4 - 4, 60, true);
+      DrawingUtils::draw_pixel(layer, x4 + 4, 60, true);
+      if (lightning_flash >= 6) {
+        DrawingUtils::draw_pixel(layer, x4 - 2, 59, true);
+        DrawingUtils::draw_pixel(layer, x4 + 2, 59, true);
+      }
     }
   }
 
   bool is_lightning_flashing() const {
-    return lightning_flash > 0;
+    return lightning_flash >= 8;
+  }
+};
+
+struct HailParticle {
+  float x, y;
+  float vx, vy;
+  int size;
+  bool bouncing;
+};
+
+class HailSleetRenderer {
+ public:
+  HailParticle particles[12];
+
+  HailSleetRenderer() {
+    for (int i = 0; i < 12; i++) {
+      particles[i] = { (float)(i * 10 + 5), (float)(i * 4), 0.5f, 6.0f + (i % 3) * 1.5f, 2, false };
+    }
+  }
+
+  void update(uint32_t step, float continuous_wind) {
+    for (int i = 0; i < 12; i++) {
+      HailParticle &p = particles[i];
+      p.x += p.vx + continuous_wind * 0.2f;
+      p.y += p.vy;
+
+      if (p.y >= 60.0f) {
+        if (!p.bouncing) {
+          p.y = 60.0f;
+          p.vy = -p.vy * 0.45f;
+          p.vx += (fast_rand() % 10 - 5) * 0.2f;
+          p.bouncing = true;
+        } else {
+          p.y = (float)(fast_rand() % 10);
+          p.x = (float)(fast_rand() % 120);
+          p.vy = 6.0f + (i % 3) * 1.5f;
+          p.vx = 0.5f;
+          p.bouncing = false;
+        }
+      } else if (p.bouncing) {
+        p.vy += 0.8f;
+      }
+    }
+  }
+
+  void render(lv_layer_t *layer) const {
+    for (int i = 0; i < 12; i++) {
+      int px = (int)particles[i].x;
+      int py = (int)particles[i].y;
+      if (px >= 0 && px < 127 && py >= 0 && py < 63) {
+        DrawingUtils::draw_rect(layer, px, py, particles[i].size, particles[i].size, 0, true);
+      }
+    }
   }
 };
 
 }  // namespace weather
+

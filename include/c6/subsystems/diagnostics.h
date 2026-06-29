@@ -18,11 +18,11 @@ class SystemDiagnostics {
 
  public:
   void mark_frame_start() {
-    last_frame_start_us = micros();
+    last_frame_start_us = get_sim_micros();
   }
 
   void mark_frame_end() {
-    uint32_t now_us = micros();
+    uint32_t now_us = get_sim_micros();
     uint32_t duration = (now_us >= last_frame_start_us) ? (now_us - last_frame_start_us) : 0;
     last_render_duration_us = last_render_duration_us * 0.85f + duration * 0.15f;
     
@@ -30,7 +30,7 @@ class SystemDiagnostics {
     cpu_load_pct = std::min(100.0f, (last_render_duration_us / 32000.0f) * 100.0f);
 
     frame_count++;
-    uint32_t now_ms = millis();
+    uint32_t now_ms = get_sim_millis();
     if (now_ms - last_fps_calc_time >= 1000) {
       current_fps = (frame_count * 1000.0f) / (now_ms - last_fps_calc_time);
       frame_count = 0;
@@ -59,7 +59,7 @@ class SystemDiagnostics {
   }
 
   std::string get_formatted_uptime() const {
-    uint32_t total_sec = millis() / 1000;
+    uint32_t total_sec = get_sim_millis() / 1000;
     uint32_t hours = total_sec / 3600;
     uint32_t mins = (total_sec % 3600) / 60;
     uint32_t secs = total_sec % 60;

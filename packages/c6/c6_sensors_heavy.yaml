@@ -1,0 +1,44 @@
+# Home Assistant Weather Simulation & Telemetry Package for C6-Heavy
+sensor:
+  - platform: homeassistant
+    id: ha_wind_speed
+    entity_id: ${weather_entity}
+    attribute: wind_speed
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            weather::global_weather_engine.set_ha_wind_speed(x);
+
+  - platform: homeassistant
+    id: ha_precipitation_rate
+    entity_id: ${weather_entity}
+    attribute: precipitation
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            weather::global_weather_engine.set_ha_precipitation_rate(x);
+
+text_sensor:
+  - platform: homeassistant
+    id: weather_condition
+    entity_id: ${weather_entity}
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            if (id(ui_mode) == 3) {
+              id(weather_mode) = weather::get_mode_from_condition(x, id(sun_state).state);
+            }
+
+  - platform: homeassistant
+    id: sun_state
+    entity_id: "sun.sun"
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            if (id(ui_mode) == 3 && id(weather_condition).state == "sunny" && x == "below_horizon") {
+              id(weather_mode) = 2; // Auto-shift clear day to clear night when sun is below horizon
+            }

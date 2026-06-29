@@ -32,8 +32,7 @@ class CelestialRenderer {
     }
   }
 
-  void render_sun(lv_layer_t *layer, uint32_t step) const {
-    int scx = 112, scy = 16;
+  void render_sun(lv_layer_t *layer, uint32_t step, int scx = 112, int scy = 16) const {
     for (int i = 0; i < 8; i++) {
       float angle = step * 0.04f + i * (M_PI / 4.0f);
       float r1 = 9.0f + MathUtils::fast_sin(step * 0.15f + i) * 0.8f;
@@ -43,6 +42,14 @@ class CelestialRenderer {
       int x2 = (int)roundf(scx + MathUtils::fast_cos(angle) * r2);
       int y2 = (int)roundf(scy + MathUtils::fast_sin(angle) * r2);
       DrawingUtils::draw_line(layer, x1, y1, x2, y2, true);
+
+      // Solar wind particle motes erupting outwards
+      float mote_dist = 14.0f + fmodf(step * 0.4f + i * 5.0f, 9.0f);
+      int mx = (int)roundf(scx + MathUtils::fast_cos(angle) * mote_dist);
+      int my = (int)roundf(scy + MathUtils::fast_sin(angle) * mote_dist);
+      if (mx >= 0 && mx < 128 && my >= 0 && my < 64) {
+        DrawingUtils::draw_pixel(layer, mx, my, true);
+      }
     }
 
     DrawingUtils::draw_circle(layer, scx, scy, 7, true);
@@ -65,21 +72,36 @@ class CelestialRenderer {
     int mcx = (int)roundf(scx + mx_rel);
     int mcy = (int)roundf(scy + my_rel);
 
-    DrawingUtils::draw_rect(layer, lex - 1, ley - 2, 3, 4, 1, false);
-    DrawingUtils::draw_rect(layer, rex - 1, rey - 2, 3, 4, 1, false);
-    DrawingUtils::draw_rect(layer, lex, ley - 2, 1, 2, 0, true);
-    DrawingUtils::draw_rect(layer, rex, rey - 2, 1, 2, 0, true);
+    // Cute double-blinking eyes logic (two quick blinks every 140 steps)
+    uint32_t blink_cycle = step % 140;
+    bool is_blinking = (blink_cycle < 3) || (blink_cycle >= 6 && blink_cycle < 9);
+    if (is_blinking) {
+      DrawingUtils::draw_line(layer, lex - 1, ley, lex + 1, ley, true);
+      DrawingUtils::draw_line(layer, rex - 1, rey, rex + 1, rey, true);
+    } else {
+      DrawingUtils::draw_rect(layer, lex - 1, ley - 2, 3, 4, 1, false);
+      DrawingUtils::draw_rect(layer, rex - 1, rey - 2, 3, 4, 1, false);
+      DrawingUtils::draw_rect(layer, lex, ley - 2, 1, 2, 0, true);
+      DrawingUtils::draw_rect(layer, rex, rey - 2, 1, 2, 0, true);
+    }
 
     DrawingUtils::draw_arc(layer, mcx, mcy, 4, 35 + rot_deg, 145 + rot_deg, 2, false);
   }
 
   void render_moon(lv_layer_t *layer, uint32_t step) const {
     int mcx = 72, mcy = 16;
+    
+    // Smooth lunar phase progression cut-out
+    float phase_shift = MathUtils::fast_sin(step * 0.003f) * 4.0f;
+    int cutout_x = (int)roundf(mcx + 4.0f + phase_shift);
+
     DrawingUtils::draw_arc(layer, mcx, mcy, 9, 100, 260, 1, true);
     DrawingUtils::draw_circle(layer, mcx, mcy, 8, true);
-    DrawingUtils::draw_circle(layer, mcx + 4, mcy - 4, 7, false);
+    DrawingUtils::draw_circle(layer, cutout_x, mcy - 3, 7, false);
 
-    DrawingUtils::draw_rect(layer, mcx - 5, mcy - 2, 1, 1, 0, false);
+    // Shaded crater details
+    DrawingUtils::draw_rect(layer, mcx - 5, mcy - 2, 2, 2, 0, false);
+    DrawingUtils::draw_pixel(layer, mcx - 4, mcy - 1, true);
     DrawingUtils::draw_rect(layer, mcx - 3, mcy + 2, 2, 1, 0, false);
     DrawingUtils::draw_rect(layer, mcx - 6, mcy + 2, 1, 1, 0, false);
 

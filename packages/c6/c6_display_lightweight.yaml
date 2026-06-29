@@ -1,0 +1,56 @@
+# Lightweight Display Package for C6 (No Particle Simulation Engine)
+display:
+  - platform: ssd1306_i2c
+    i2c_id: i2c_1
+    model: SH1106_128X64
+    id: display_ssd1306_i2c_1
+    auto_clear_enabled: false
+    update_interval: 1s
+    contrast: 0.0
+
+lvgl:
+  id: my_lvgl
+  displays: display_ssd1306_i2c_1
+  update_interval: 500ms
+  bg_color: black
+  theme:
+    dark_mode: true
+
+  pages:
+    - id: page_main
+      widgets:
+        - label:
+            text: "IN/OUT"
+            styles: style_small
+            align: top_left
+            x: 6
+            y: 8
+        - label:
+            text: "--.-°C"
+            id: indoor_temp_label
+            styles: style_medium
+            align: top_left
+            x: 6
+            y: 21
+        - label:
+            text: "--.-°C"
+            id: outdoor_temp_label
+            styles: style_medium
+            align: top_left
+            x: 6
+            y: 38
+        - label:
+            text: "--:--"
+            id: clock_label
+            styles: style_large
+            align: top_right
+            x: -6
+            y: 22
+
+interval:
+  - interval: 1s
+    then:
+      - lvgl.label.update:
+          id: clock_label
+          text: !lambda |-
+            return id(ha_time).now().strftime("%H:%M");

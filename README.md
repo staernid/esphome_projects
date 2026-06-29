@@ -8,10 +8,16 @@ This repository contains reusable, modular ESPHome configurations for **ESP32-C3
 
 ```text
 .
-├── common.yaml    # Core shared services (Wi-Fi, Home Assistant API, OTA, Logger, HA Time)
-├── c3.yaml        # ESP32-C3 SuperMini base configuration
-├── c6.yaml        # ESP32-C6 DevKitC-1 display & weather engine configuration
-└── secrets.yaml   # Local Wi-Fi and API credentials (not committed to version control)
+├── common.yaml          # Core shared services (Wi-Fi, Home Assistant API, OTA, Logger, HA Time)
+├── c3.yaml              # ESP32-C3 SuperMini base configuration
+├── c6.yaml              # ESP32-C6 Lightweight target (BLE tracking + minimal UI)
+├── c6.md                # Lightweight C6 target documentation
+├── c6-heavy.yaml        # ESP32-C6 Heavy target (Full 60 FPS weather animation engine)
+├── c6-heavy.md          # Heavy C6 target documentation
+├── c6_sim-heavy.yaml    # ESP32-C6 Heavy host simulator
+├── include/
+│   └── weather_engine/  # Standalone extracted C++ weather simulation library
+└── secrets.yaml         # Local Wi-Fi and API credentials (not committed to version control)
 ```
 
 ---

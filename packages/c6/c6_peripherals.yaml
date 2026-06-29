@@ -1,4 +1,4 @@
-# Peripherals Package for C6 (Onboard WS2812 RGB LED & Hardware Outputs)
+# Peripherals Package for C6 (Onboard WS2812 RGB LED)
 light:
   - platform: esp32_rmt_led_strip
     rgb_order: GRB

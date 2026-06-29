@@ -16,22 +16,22 @@ sensor:
     on_clockwise:
       - lambda: |-
           if (id(ui_mode) != 2) {
-            id(ui_mode) = 2; // Switch to Manual Showcase Mode
+            id(ui_mode) = 2; // Switch to Manual Showcase (Playroom) Mode
             id(apply_ui_mode).execute();
           } else {
-            id(weather_mode) = (id(weather_mode) % 8) + 1;
-            weather::global_weather_engine.reset_manual_wind();
-            id(show_osd).execute(weather::get_mode_name(id(weather_mode)));
+            weather::global_weather_engine.adjust_manual_wind(1.0f);
+            float current_w = weather::global_weather_engine.get_target_wind();
+            id(show_osd).execute(str_sprintf("Wind: %+.1f", current_w));
           }
     on_anticlockwise:
       - lambda: |-
           if (id(ui_mode) != 2) {
-            id(ui_mode) = 2; // Switch to Manual Showcase Mode
+            id(ui_mode) = 2; // Switch to Manual Showcase (Playroom) Mode
             id(apply_ui_mode).execute();
           } else {
-            id(weather_mode) = (id(weather_mode) == 1) ? 8 : id(weather_mode) - 1;
-            weather::global_weather_engine.reset_manual_wind();
-            id(show_osd).execute(weather::get_mode_name(id(weather_mode)));
+            weather::global_weather_engine.adjust_manual_wind(-1.0f);
+            float current_w = weather::global_weather_engine.get_target_wind();
+            id(show_osd).execute(str_sprintf("Wind: %+.1f", current_w));
           }
 
 binary_sensor:
@@ -76,10 +76,10 @@ binary_sensor:
           - ON for at most 0.4s
         then:
           - lambda: |-
-              if (id(ui_mode) == 4) {
+              if (id(ui_mode) == 6) {
                 id(ui_mode) = 3;
               } else {
-                id(ui_mode) = 4;
+                id(ui_mode) = 6;
               }
               ESP_LOGI("button", "Toggled Matrix Diagnostics Mode: %d", id(ui_mode));
           - script.execute: apply_ui_mode
@@ -88,8 +88,8 @@ binary_sensor:
           - OFF for at least 0.3s
         then:
           - lambda: |-
-              if (id(ui_mode) == 4) id(ui_mode) = 1;
-              else id(ui_mode) = (id(ui_mode) % 3) + 1;
+              if (id(ui_mode) == 6) id(ui_mode) = 1;
+              else id(ui_mode) = (id(ui_mode) % 5) + 1;
               ESP_LOGI("button", "Cycled UI Mode to: %d", id(ui_mode));
           - script.execute: apply_ui_mode
 
@@ -105,7 +105,7 @@ binary_sensor:
     on_press:
       then:
         - lambda: |-
-            id(weather_mode) = (id(weather_mode) % 8) + 1;
+            id(weather_mode) = (id(weather_mode) % 10) + 1;
             weather::global_weather_engine.reset_manual_wind();
             ESP_LOGI("button", "Cycled weather effect to: %d (%s)", id(weather_mode), weather::get_mode_name(id(weather_mode)));
             if (id(ui_mode) != 2) {

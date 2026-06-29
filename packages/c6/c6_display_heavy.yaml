@@ -158,7 +158,21 @@ interval:
       - lambda: |-
           id(anim_step)++;
           weather::global_weather_engine.update(id(anim_step), id(weather_mode));
-          weather::global_weather_engine.render(id(weather_canvas), id(anim_step), id(weather_mode));
+          if (id(ui_mode) == 4) {
+            lv_layer_t layer;
+            lv_canvas_init_layer(id(weather_canvas), &layer);
+            lv_canvas_fill_bg(id(weather_canvas), lv_color_make(0, 0, 0), LV_OPA_TRANSP);
+            weather::global_weather_engine.get_sparklines().render(&layer, id(anim_step));
+            lv_canvas_finish_layer(id(weather_canvas), &layer);
+          } else if (id(ui_mode) == 5) {
+            lv_layer_t layer;
+            lv_canvas_init_layer(id(weather_canvas), &layer);
+            lv_canvas_fill_bg(id(weather_canvas), lv_color_make(0, 0, 0), LV_OPA_TRANSP);
+            weather::global_weather_engine.get_telemetry().render(&layer, id(anim_step));
+            lv_canvas_finish_layer(id(weather_canvas), &layer);
+          } else {
+            weather::global_weather_engine.render(id(weather_canvas), id(anim_step), id(weather_mode));
+          }
 
           // Multi-mode WS2812 RGB Lightning Strobe Lighting Engine
           bool is_flashing = weather::global_weather_engine.is_lightning_flashing();
@@ -197,13 +211,13 @@ script:
           }
       - if:
           condition:
-            lambda: 'return id(ui_mode) == 1 || id(ui_mode) == 2;'
+            lambda: 'return id(ui_mode) == 1 || id(ui_mode) == 2 || id(ui_mode) == 4 || id(ui_mode) == 5;'
           then:
             - lvgl.page.show: page_blank
           else:
             - if:
                 condition:
-                  lambda: 'return id(ui_mode) == 4;'
+                  lambda: 'return id(ui_mode) == 6;'
                 then:
                   - lvgl.page.show: page_diagnostics
                 else:
@@ -213,5 +227,7 @@ script:
           message: !lambda |-
             if (id(ui_mode) == 1) return "Auto Showcase";
             if (id(ui_mode) == 2) return str_sprintf("Manual: %s", weather::get_mode_name(id(weather_mode)));
-            if (id(ui_mode) == 4) return "Matrix Diagnostics";
+            if (id(ui_mode) == 4) return "24h Forecast";
+            if (id(ui_mode) == 5) return "Environmental";
+            if (id(ui_mode) == 6) return "Matrix Diagnostics";
             return "Passive Weather";

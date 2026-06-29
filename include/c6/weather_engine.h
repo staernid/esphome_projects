@@ -6,8 +6,7 @@
 #include "renderers/precipitation.h"
 #include "renderers/landscape.h"
 #include "renderers/entities.h"
-#include "subsystems/audio_chiptune.h"
-#include "subsystems/haptics.h"
+#include "renderers/dashboards.h"
 #include "subsystems/diagnostics.h"
 #include "subsystems/wifi_csi.h"
 
@@ -26,13 +25,16 @@ class Engine {
   FogRenderer fog;
   WindRenderer wind;
   PrecipitationRenderer precipitation;
+  HailSleetRenderer hail_sleet;
   LightningRenderer lightning;
   GrassRenderer grass;
   TreeRenderer tree;
+  LeafRenderer leaves;
+  OceanRenderer ocean;
   BoidRenderer boids;
+  ForecastSparklineRenderer sparklines;
+  EnvironmentalTelemetryRenderer telemetry;
 
-  ChiptuneAudioEngine audio;
-  HapticEngine haptics;
   SystemDiagnostics diagnostics;
   WiFiCSIMotionDetector csi_motion;
 
@@ -61,10 +63,10 @@ class Engine {
   bool is_lightning_flashing() const { return lightning.is_lightning_flashing(); }
   void trigger_lightning() { lightning.trigger_lightning(); }
 
-  ChiptuneAudioEngine& get_audio() { return audio; }
-  HapticEngine& get_haptics() { return haptics; }
   SystemDiagnostics& get_diagnostics() { return diagnostics; }
   WiFiCSIMotionDetector& get_csi() { return csi_motion; }
+  ForecastSparklineRenderer& get_sparklines() { return sparklines; }
+  EnvironmentalTelemetryRenderer& get_telemetry() { return telemetry; }
 
   void update(uint32_t step, int mode) {
     diagnostics.mark_frame_start();
@@ -77,11 +79,21 @@ class Engine {
     float ha_wind_offset = ha_wind_speed * 0.12f;
     float effective_wind = continuous_wind + ha_wind_offset;
 
+    if (mode == 9) {
+      ocean.update(step, effective_wind);
+      return;
+    }
+
     celestial.update(step, mode);
     clouds.update(mode, effective_wind);
     boids.update(step, mode, effective_wind);
-    if (mode != 8) precipitation.update(step, mode, effective_wind, ha_precipitation_rate);
-    if (mode == 8) wind.update(step, effective_wind);
+    leaves.update(step, mode, effective_wind);
+    if (mode == 10) hail_sleet.update(step, effective_wind);
+    if (mode != 8 && mode != 10) precipitation.update(step, mode, effective_wind, ha_precipitation_rate);
+    if (mode == 8) {
+      wind.update(step, effective_wind);
+      fog.update(step, effective_wind);
+    }
     lightning.update(step, mode);
   }
 
@@ -91,6 +103,7 @@ class Engine {
       return;
     }
 
+#if defined(LV_USE_CANVAS) && LV_USE_CANVAS
     lv_layer_t layer;
     lv_canvas_init_layer(canvas_obj, &layer);
 
@@ -105,18 +118,28 @@ class Engine {
     float ha_wind_offset = ha_wind_speed * 0.12f;
     float effective_wind = continuous_wind + ha_wind_offset;
 
+    if (mode == 9) {
+      ocean.render(&layer, step);
+      lv_canvas_finish_layer(canvas_obj, &layer);
+      diagnostics.mark_frame_end();
+      return;
+    }
+
     if (mode == 1 || mode == 4) celestial.render_sun(&layer, step);
     if (mode == 2) celestial.render_moon(&layer, step);
     if (mode == 1 || mode == 4) tree.render(&layer, step, effective_wind);
-    if (mode == 3 || mode == 4 || mode == 7) clouds.render(&layer, mode);
-    if (mode == 1 || mode == 3 || mode == 4 || mode == 8) boids.render(&layer, step);
+    if (mode == 1 || mode == 4 || mode == 7 || mode == 8) leaves.render(&layer, step);
+    if (mode >= 3 && mode <= 7) clouds.render(&layer, step, mode);
+    if (mode == 1 || mode == 3 || mode == 4) boids.render(&layer, step);
     if (mode == 8) fog.render(&layer, step, effective_wind);
     if (mode == 8) wind.render(&layer, step);
+    if (mode == 10) hail_sleet.render(&layer);
     if (mode == 7 && lightning.lightning_flash > 0) lightning.render(&layer);
-    if ((mode >= 5 && mode != 8) || mode == 1 || mode == 4) precipitation.render(&layer, mode, effective_wind, ha_precipitation_rate);
+    if ((mode >= 5 && mode != 8 && mode != 10) || mode == 1 || mode == 4) precipitation.render(&layer, mode, effective_wind, ha_precipitation_rate);
     grass.render(&layer, step, mode, gust_impulse, effective_wind);
 
     lv_canvas_finish_layer(canvas_obj, &layer);
+#endif
     diagnostics.mark_frame_end();
   }
 };
@@ -133,6 +156,8 @@ inline const char* get_mode_name(int mode) {
     case 6: return "Snowy Blizzard";
     case 7: return "Thunderstorm";
     case 8: return "Windy / Fog";
+    case 9: return "Coastal Ocean";
+    case 10: return "Hail & Sleet";
     default: return "Unknown";
   }
 }
@@ -148,6 +173,7 @@ inline int get_mode_from_condition(const std::string &cond, const std::string &s
   if (cond == "snowy" || cond == "snowy-rainy") return 6;
   if (cond == "lightning" || cond == "lightning-rainy") return 7;
   if (cond == "windy" || cond == "fog") return 8;
+  if (cond == "hail" || cond == "sleet") return 10;
   return 1;
 }
 

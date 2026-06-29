@@ -148,6 +148,44 @@ class DrawingUtils {
       draw_pixel(layer, px_end, py_end, is_white);
     }
   }
+
+  static void render_wave_strip(lv_layer_t *layer, uint32_t step, float scroll_x, 
+                                int base_y, float mode_mult, bool is_ceiling, 
+                                WaveGenerator::WaveRenderMode render_mode = WaveGenerator::SOLID_FILL,
+                                float freq_mult = 1.0f, float amp_mult = 1.0f) {
+    for (int x = 0; x < 128; x++) {
+      float raw_wave = WaveGenerator::calculate_wave_height(x, scroll_x, step, freq_mult, amp_mult);
+      int wave_h = (int)roundf(raw_wave * mode_mult);
+      
+      if (is_ceiling) {
+        int target_y = base_y + wave_h;
+        if (target_y < 0) target_y = 0;
+        if (target_y >= 64) target_y = 63;
+
+        if (render_mode == WaveGenerator::SOLID_FILL) {
+          draw_rect(layer, x, 0, 1, target_y + 1, 0, true);
+        } else if (render_mode == WaveGenerator::OUTLINE_ONLY) {
+          draw_pixel(layer, x, target_y, true);
+        } else if (render_mode == WaveGenerator::OUTLINE_FILL) {
+          if (target_y > 0) draw_rect(layer, x, 0, 1, target_y, 0, false); // Clear interior to black
+          draw_pixel(layer, x, target_y, true); // Strict 1-pixel white vector outline edge
+        }
+      } else {
+        int target_y = base_y - wave_h;
+        if (target_y < 0) target_y = 0;
+        if (target_y >= 64) target_y = 63;
+
+        if (render_mode == WaveGenerator::SOLID_FILL) {
+          draw_rect(layer, x, target_y, 1, 64 - target_y, 0, true);
+        } else if (render_mode == WaveGenerator::OUTLINE_ONLY) {
+          draw_pixel(layer, x, target_y, true);
+        } else if (render_mode == WaveGenerator::OUTLINE_FILL) {
+          draw_pixel(layer, x, target_y, true); // Strict 1-pixel white vector outline crest
+          if (target_y < 63) draw_rect(layer, x, target_y + 1, 1, 63 - target_y, 0, false); // Clear body below
+        }
+      }
+    }
+  }
 };
 
 }  // namespace weather

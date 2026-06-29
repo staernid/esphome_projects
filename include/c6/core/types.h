@@ -1,6 +1,13 @@
 #pragma once
+#if __has_include("esphome.h")
 #include "esphome.h"
+#endif
+#if __has_include("lvgl.h")
 #include "lvgl.h"
+#else
+struct lv_layer_t {};
+struct lv_obj_t {};
+#endif
 #if __has_include("esp_system.h")
 #include "esp_system.h"
 #endif
@@ -9,8 +16,30 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <chrono>
 
 namespace weather {
+
+inline uint32_t get_sim_millis() {
+#if __has_include("esphome.h")
+  return ::millis();
+#else
+  using namespace std::chrono;
+  static auto start = steady_clock::now();
+  return duration_cast<milliseconds>(steady_clock::now() - start).count();
+#endif
+}
+
+inline uint32_t get_sim_micros() {
+#if __has_include("esphome.h")
+  return ::micros();
+#else
+  using namespace std::chrono;
+  static auto start = steady_clock::now();
+  return duration_cast<microseconds>(steady_clock::now() - start).count();
+#endif
+}
+
 
 struct Particle {
   float x;
@@ -64,6 +93,21 @@ struct MathUtils {
 
   static float fast_cos(float rad) {
     return fast_sin(rad + 1.5707963f);
+  }
+};
+
+struct WaveGenerator {
+  enum WaveRenderMode {
+    SOLID_FILL,   // Solid filled band from baseline to wave height
+    OUTLINE_ONLY, // Pure 1-pixel vector outline line with transparent background
+    OUTLINE_FILL  // 1-pixel outline line with solid fill behind it
+  };
+
+  static float calculate_wave_height(float x, float scroll_x, uint32_t step, float freq_mult = 1.0f, float amp_mult = 1.0f) {
+    float wave1 = MathUtils::fast_sin((x + scroll_x) * 0.06f * freq_mult) * (2.5f * amp_mult);
+    float wave2 = MathUtils::fast_cos((x + scroll_x * 1.3f) * 0.12f * freq_mult + step * 0.03f) * (1.8f * amp_mult);
+    float wave3 = MathUtils::fast_sin(step * 0.04f + x * 0.08f * freq_mult) * (1.0f * amp_mult);
+    return wave1 + wave2 + wave3;
   }
 };
 

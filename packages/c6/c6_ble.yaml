@@ -1,0 +1,13 @@
+# ESP32-C6 BLE Tracking & iBeacon Broadcast Package
+esp32_ble_tracker:
+  scan_parameters:
+    duration: 300s
+    interval: 300ms
+    window: 300ms
+    active: true
+
+esp32_ble_beacon:
+  type: IBEACON
+  uuid: "e2c56db5-dffb-48d2-b060-d0f5a71096e0"
+  major: 100
+  minor: 1
