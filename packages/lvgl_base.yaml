@@ -1,13 +1,25 @@
 font:
+  # --- OPTION 1: High-Tech Dashboard (Active) ---
+  # - d: small
+  #   file: "gfonts://Share Tech Mono"
+  #   size: 10
+  # - id: medium
+  #   file: "assets/monacottf.otf"
+  #   size: 12
+  # - id: large
+  #   file: "gfonts://Orbitron"
+  #   size: 18
+
+  # --- OPTION 3: Ultra-Clean Monospace (Swappable) ---
   - id: small
-    file: "gfonts://Roboto"
+    file: "gfonts://Fira Code"
     size: 10
   - id: medium
-    file: "gfonts://Roboto"
-    size: 14
+    file: "assets/monacottf.otf"
+    size: 12
   - id: large
-    file: "gfonts://Roboto"
-    size: 24
+    file: "gfonts://Fira Code"
+    size: 20
 
 lvgl:
   style_definitions:

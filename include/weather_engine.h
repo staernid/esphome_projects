@@ -1,7 +1,9 @@
 #pragma once
 #include "esphome.h"
 #include "lvgl.h"
+#if __has_include("esp_system.h")
 #include "esp_system.h"
+#endif
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
@@ -67,46 +69,124 @@ struct MathUtils {
 class DrawingUtils {
  public:
   static void draw_rect(lv_layer_t *layer, int x, int y, int w, int h, int radius, bool is_white) {
-    lv_draw_rect_dsc_t dsc;
-    lv_draw_rect_dsc_init(&dsc);
-    dsc.bg_color = is_white ? lv_color_make(255, 255, 255) : lv_color_make(0, 0, 0);
-    dsc.radius = radius;
-    lv_area_t area = {x, y, x + w - 1, y + h - 1};
-    lv_draw_rect(layer, &dsc, &area);
-  }
-
-  static void draw_arc(lv_layer_t *layer, int cx, int cy, int radius, int start_angle, int end_angle, int width, bool is_white) {
-    lv_draw_arc_dsc_t dsc;
-    lv_draw_arc_dsc_init(&dsc);
-    dsc.color = is_white ? lv_color_make(255, 255, 255) : lv_color_make(0, 0, 0);
-    dsc.width = width;
-    dsc.center.x = cx;
-    dsc.center.y = cy;
-    dsc.radius = radius;
-    dsc.start_angle = start_angle;
-    dsc.end_angle = end_angle;
-    lv_draw_arc(layer, &dsc);
-  }
-
-  static void draw_circle(lv_layer_t *layer, int cx, int cy, int radius, bool is_white) {
-    draw_rect(layer, cx - radius, cy - radius, radius * 2 + 1, radius * 2 + 1, LV_RADIUS_CIRCLE, is_white);
-  }
-
-  static void draw_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, bool is_white) {
-    lv_draw_line_dsc_t dsc;
-    lv_draw_line_dsc_init(&dsc);
-    dsc.color = is_white ? lv_color_make(255, 255, 255) : lv_color_make(0, 0, 0);
-    dsc.width = 1;
-    dsc.p1.x = x1;
-    dsc.p1.y = y1;
-    dsc.p2.x = x2;
-    dsc.p2.y = y2;
-    lv_draw_line(layer, &dsc);
+    if (w <= 0 || h <= 0) return;
+    if (radius <= 0) {
+      lv_draw_rect_dsc_t dsc;
+      lv_draw_rect_dsc_init(&dsc);
+      dsc.bg_color = is_white ? lv_color_make(255, 255, 255) : lv_color_make(0, 0, 0);
+      dsc.radius = 0;
+      lv_area_t area = {x, y, x + w - 1, y + h - 1};
+      lv_draw_rect(layer, &dsc, &area);
+    } else {
+      for (int i = 0; i < h; i++) {
+        int cur_y = y + i;
+        int inset = 0;
+        if (radius == 1) {
+          if (i == 0 || i == h - 1) inset = 1;
+        } else {
+          if (i < radius) {
+            int dy = radius - i;
+            inset = radius - (int)roundf(sqrtf(radius * radius - dy * dy));
+          } else if (i >= h - radius) {
+            int dy = i - (h - 1 - radius);
+            inset = radius - (int)roundf(sqrtf(radius * radius - dy * dy));
+          }
+        }
+        int line_w = w - 2 * inset;
+        if (line_w > 0) {
+          draw_rect(layer, x + inset, cur_y, line_w, 1, 0, is_white);
+        }
+      }
+    }
   }
 
   static void draw_pixel(lv_layer_t *layer, int x, int y, bool is_white) {
     if (x < 0 || x >= 128 || y < 0 || y >= 64) return;
     draw_rect(layer, x, y, 1, 1, 0, is_white);
+  }
+
+  static void draw_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, bool is_white) {
+    if (x1 == x2) {
+      int ymin = std::min(y1, y2);
+      int ymax = std::max(y1, y2);
+      int h = ymax - ymin + 1;
+      int x = x1;
+      if (x < 0 || x >= 128) return;
+      if (ymin < 0) { h += ymin; ymin = 0; }
+      if (ymin + h > 64) { h = 64 - ymin; }
+      if (h > 0) draw_rect(layer, x, ymin, 1, h, 0, is_white);
+      return;
+    }
+    if (y1 == y2) {
+      int xmin = std::min(x1, x2);
+      int xmax = std::max(x1, x2);
+      int w = xmax - xmin + 1;
+      int y = y1;
+      if (y < 0 || y >= 64) return;
+      if (xmin < 0) { w += xmin; xmin = 0; }
+      if (xmin + w > 128) { w = 128 - xmin; }
+      if (w > 0) draw_rect(layer, xmin, y, w, 1, 0, is_white);
+      return;
+    }
+    int dx = abs(x2 - x1);
+    int dy = abs(y2 - y1);
+    int sx = (x1 < x2) ? 1 : -1;
+    int sy = (y1 < y2) ? 1 : -1;
+    int err = dx - dy;
+
+    int curr_x = x1;
+    int curr_y = y1;
+    while (true) {
+      draw_pixel(layer, curr_x, curr_y, is_white);
+      if (curr_x == x2 && curr_y == y2) break;
+      int e2 = 2 * err;
+      if (e2 > -dy) {
+        err -= dy;
+        curr_x += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        curr_y += sy;
+      }
+    }
+  }
+
+  static void draw_circle(lv_layer_t *layer, int cx, int cy, int radius, bool is_white) {
+    if (radius <= 0) {
+      draw_pixel(layer, cx, cy, is_white);
+      return;
+    }
+    for (int dy = -radius; dy <= radius; dy++) {
+      int py = cy + dy;
+      if (py < 0 || py >= 64) continue;
+      int dx = (int)roundf(sqrtf(radius * radius - dy * dy));
+      int px1 = cx - dx;
+      int px2 = cx + dx;
+      int w = px2 - px1 + 1;
+      int start_x = px1;
+      if (start_x < 0) { w += start_x; start_x = 0; }
+      if (start_x + w > 128) { w = 128 - start_x; }
+      if (w > 0) {
+        draw_rect(layer, start_x, py, w, 1, 0, is_white);
+      }
+    }
+  }
+
+  static void draw_arc(lv_layer_t *layer, int cx, int cy, int radius, int start_angle, int end_angle, int width, bool is_white) {
+    if (radius <= 0 || width <= 0) return;
+    int min_r = std::max(1, radius - width + 1);
+    for (int r = min_r; r <= radius; r++) {
+      for (int a = start_angle; a <= end_angle; a += 2) {
+        float rad = a * 0.0174532925f;
+        int px = (int)roundf(cx + MathUtils::fast_cos(rad) * r);
+        int py = (int)roundf(cy + MathUtils::fast_sin(rad) * r);
+        draw_pixel(layer, px, py, is_white);
+      }
+      float rad_end = end_angle * 0.0174532925f;
+      int px_end = (int)roundf(cx + MathUtils::fast_cos(rad_end) * r);
+      int py_end = (int)roundf(cy + MathUtils::fast_sin(rad_end) * r);
+      draw_pixel(layer, px_end, py_end, is_white);
+    }
   }
 };
 
@@ -177,7 +257,7 @@ class CelestialRenderer {
     DrawingUtils::draw_rect(layer, lex, ley - 2, 1, 2, 0, true);
     DrawingUtils::draw_rect(layer, rex, rey - 2, 1, 2, 0, true);
 
-    DrawingUtils::draw_arc(layer, mcx, mcy, 5, 20 + rot_deg, 160 + rot_deg, 2, false);
+    DrawingUtils::draw_arc(layer, mcx, mcy, 4, 35 + rot_deg, 145 + rot_deg, 2, false);
   }
 
   void render_moon(lv_layer_t *layer, uint32_t step) const {
@@ -508,13 +588,17 @@ class LightningRenderer {
   int lightning_flash = 0;
   float lightning_x = 64.0f;
 
+  void trigger_lightning() {
+    lightning_flash = 2; // ~60ms sharp flash
+    lightning_x = 25.0f + (fast_rand() % 75);
+  }
+
   void update(uint32_t step, int mode) {
     if (mode == 7) {
       if (lightning_flash > 0) {
         lightning_flash--;
-      } else if ((step % 280) == 0 || (fast_rand() % 350 == 0)) {
-        lightning_flash = 2; // ~60ms flash
-        lightning_x = 25.0f + (fast_rand() % 75);
+      } else if ((step % 110) == 0 || (fast_rand() % 130 == 0)) {
+        trigger_lightning();
       }
     } else {
       lightning_flash = 0;
@@ -530,6 +614,10 @@ class LightningRenderer {
       DrawingUtils::draw_line(layer, lx + 4, 24, lx + 10, 34, true);
       DrawingUtils::draw_line(layer, lx - 2, 38, lx - 7, 46, true);
     }
+  }
+
+  bool is_lightning_flashing() const {
+    return lightning_flash > 0;
   }
 };
 
@@ -635,6 +723,154 @@ class TreeRenderer {
   }
 };
 
+struct Boid {
+  float x;
+  float y;
+  float vx;
+  float vy;
+  float flap_phase;
+  bool is_apex;
+};
+
+class BoidRenderer {
+ public:
+  static const int NUM_BOIDS = 7;
+  Boid boids[NUM_BOIDS];
+  bool initialized = false;
+
+  void init() {
+    float start_x[NUM_BOIDS] = {-10.0f, -20.0f, -24.0f, -32.0f, -38.0f, -48.0f, -54.0f};
+    float start_y[NUM_BOIDS] = {18.0f,  14.0f,  22.0f,  11.0f,  26.0f,  16.0f,  28.0f};
+    for (int i = 0; i < NUM_BOIDS; i++) {
+      boids[i].x = start_x[i];
+      boids[i].y = start_y[i];
+      boids[i].vx = 1.2f + (fast_rand() % 10) * 0.05f;
+      boids[i].vy = ((fast_rand() % 10) - 5) * 0.03f;
+      boids[i].flap_phase = (fast_rand() % 100) * 0.0628f;
+      boids[i].is_apex = (i == 0);
+    }
+    initialized = true;
+  }
+
+  void update(uint32_t step, int mode, float continuous_wind) {
+    if (!initialized) init();
+
+    if (mode != 1 && mode != 3 && mode != 4 && mode != 8) return;
+
+    for (int i = 0; i < NUM_BOIDS; i++) {
+      Boid &b = boids[i];
+
+      if (b.is_apex) {
+        float target_vy = MathUtils::fast_sin(step * 0.04f) * 0.4f;
+        b.vy += (target_vy - b.vy) * 0.08f;
+        float target_vx = 1.3f + continuous_wind * 0.04f;
+        b.vx += (target_vx - b.vx) * 0.05f;
+      } else {
+        float sep_x = 0.0f, sep_y = 0.0f;
+        float align_x = 0.0f, align_y = 0.0f;
+        float coh_x = 0.0f, coh_y = 0.0f;
+        int neighbors = 0;
+
+        for (int j = 0; j < NUM_BOIDS; j++) {
+          if (i == j) continue;
+          const Boid &other = boids[j];
+          float dx = other.x - b.x;
+          float dy = other.y - b.y;
+          float dist_sq = dx * dx + dy * dy;
+
+          if (dist_sq < 1.0f) dist_sq = 1.0f;
+          float dist = sqrtf(dist_sq);
+
+          if (dist < 12.0f) {
+            float force = (12.0f - dist) / dist;
+            sep_x -= dx * force * 0.15f;
+            sep_y -= dy * force * 0.15f;
+          }
+
+          if (dist < 35.0f) {
+            align_x += other.vx;
+            align_y += other.vy;
+            coh_x += other.x;
+            coh_y += other.y;
+            neighbors++;
+          }
+        }
+
+        if (neighbors > 0) {
+          align_x /= neighbors;
+          align_y /= neighbors;
+          b.vx += (align_x - b.vx) * 0.06f;
+          b.vy += (align_y - b.vy) * 0.06f;
+
+          coh_x /= neighbors;
+          coh_y /= neighbors;
+          b.vx += (coh_x - b.x) * 0.015f;
+          b.vy += (coh_y - b.y) * 0.015f;
+        }
+
+        const Boid &apex = boids[0];
+        float side = (i % 2 == 1) ? 1.0f : -1.0f;
+        int rank = (i + 1) / 2;
+        float desired_x = apex.x - rank * 9.0f;
+        float desired_y = apex.y + side * rank * 5.0f;
+
+        b.vx += (desired_x - b.x) * 0.012f;
+        b.vy += (desired_y - b.y) * 0.018f;
+
+        b.vx += sep_x;
+        b.vy += sep_y;
+      }
+
+      b.vx += continuous_wind * 0.01f;
+
+      float speed = sqrtf(b.vx * b.vx + b.vy * b.vy);
+      float max_speed = b.is_apex ? 1.8f : 1.6f;
+      float min_speed = 0.7f;
+      if (speed > max_speed) {
+        b.vx = (b.vx / speed) * max_speed;
+        b.vy = (b.vy / speed) * max_speed;
+      } else if (speed < min_speed) {
+        b.vx = (b.vx / speed) * min_speed;
+        b.vy = (b.vy / speed) * min_speed;
+      }
+
+      b.x += b.vx;
+      b.y += b.vy;
+
+      if (b.y < 6.0f) b.vy += 0.15f;
+      if (b.y > 38.0f) b.vy -= 0.15f;
+
+      if (b.x > 145.0f) {
+        b.x = -20.0f - (i * 8.0f);
+        b.y = 10.0f + (fast_rand() % 22);
+      }
+    }
+  }
+
+  void render(lv_layer_t *layer, uint32_t step) const {
+    for (int i = 0; i < NUM_BOIDS; i++) {
+      const Boid &b = boids[i];
+      int bx = (int)roundf(b.x);
+      int by = (int)roundf(b.y);
+
+      if (bx < -10 || bx > 135 || by < 0 || by > 64) continue;
+
+      float flap_speed = b.is_apex ? 0.22f : 0.28f;
+      float flap = MathUtils::fast_sin(step * flap_speed + b.flap_phase);
+      
+      int wing_span = b.is_apex ? 4 : 3;
+      int flap_y = (int)roundf(flap * 2.2f);
+
+      DrawingUtils::draw_line(layer, bx - wing_span, by - flap_y, bx, by + (flap_y > 0 ? 0 : 1), true);
+      DrawingUtils::draw_line(layer, bx, by + (flap_y > 0 ? 0 : 1), bx + wing_span, by - flap_y, true);
+
+      if (b.is_apex) {
+        DrawingUtils::draw_pixel(layer, bx, by + 1, true);
+      }
+    }
+  }
+};
+
 class Engine {
  private:
   float gust_impulse = 0.0f;
@@ -651,6 +887,7 @@ class Engine {
   LightningRenderer lightning;
   GrassRenderer grass;
   TreeRenderer tree;
+  BoidRenderer boids;
 
  public:
   void set_ha_wind_speed(float speed) { ha_wind_speed = std::max(0.0f, speed); }
@@ -674,13 +911,13 @@ class Engine {
   }
 
   float get_target_wind() const { return target_wind; }
+  bool is_lightning_flashing() const { return lightning.is_lightning_flashing(); }
+  void trigger_lightning() { lightning.trigger_lightning(); }
 
   void update(uint32_t step, int mode) {
     gust_impulse *= 0.91f;
 
-    // Smooth inertia delay: continuous_wind follows target_wind
     continuous_wind += (target_wind - continuous_wind) * 0.14f;
-    // Decay physics: target_wind slowly decays back toward zero
     target_wind *= 0.965f;
     if (std::abs(target_wind) < 0.01f) target_wind = 0.0f;
 
@@ -689,6 +926,7 @@ class Engine {
 
     celestial.update(step, mode);
     clouds.update(mode, effective_wind);
+    boids.update(step, mode, effective_wind);
     if (mode != 8) precipitation.update(step, mode, effective_wind, ha_precipitation_rate);
     if (mode == 8) wind.update(step, effective_wind);
     lightning.update(step, mode);
@@ -715,6 +953,7 @@ class Engine {
     if (mode == 2) celestial.render_moon(&layer, step);
     if (mode == 1 || mode == 4) tree.render(&layer, step, effective_wind);
     if (mode == 3 || mode == 4 || mode == 7) clouds.render(&layer, mode);
+    if (mode == 1 || mode == 3 || mode == 4 || mode == 8) boids.render(&layer, step);
     if (mode == 8) fog.render(&layer, step, effective_wind);
     if (mode == 8) wind.render(&layer, step);
     if (mode == 7 && lightning.lightning_flash > 0) lightning.render(&layer);

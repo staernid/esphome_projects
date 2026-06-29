@@ -1,0 +1,263 @@
+substitutions:
+  name: "c6-sim"
+  friendly_name: "c6 Simulation"
+
+  inside_temp_entity: "sensor.c6_inside_temp"
+  weather_entity: "weather.forecast_home"
+
+logger:
+
+packages:
+  lvgl_base: !include packages/lvgl_base.yaml
+
+# Simulated time for host clock display
+time:
+  - platform: host
+    id: ha_time
+
+globals:
+  - id: ui_mode
+    type: int
+    initial_value: '3' # 1: Auto Showcase, 2: Manual Showcase, 3: Passive Weather
+  - id: weather_mode
+    type: int
+    initial_value: '1' # 1: Sunny, 2: Clear Night, 3: Cloudy, 4: Partly Cloudy, 5: Rainy, 6: Snowy, 7: Lightning, 8: Windy/Fog
+  - id: anim_step
+    type: uint32_t
+    initial_value: '0'
+  - id: display_contrast
+    type: float
+    initial_value: '0.0'
+  - id: last_indoor_temp
+    type: float
+    initial_value: '0.0'
+  - id: last_outdoor_temp
+    type: float
+    initial_value: '0.0'
+  - id: osd_wind_feedback
+    type: bool
+    initial_value: 'false'
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  includes:
+    - include/weather_engine.h
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: apply_ui_mode
+
+host:
+
+# Dummy simulated sensors for testing UI without Home Assistant server
+sensor:
+  - platform: template
+    id: inside_temperature
+    name: "Simulated Inside Temp"
+    lambda: 'return 21.5f;'
+  - platform: template
+    id: outside_temperature
+    name: "Simulated Outside Temp"
+    lambda: 'return 18.2f;'
+  - platform: template
+    id: ha_wind_speed
+    name: "Simulated Wind Speed"
+    lambda: 'return 5.0f;'
+    on_value:
+      then:
+        - lambda: |-
+            weather::global_weather_engine.set_ha_wind_speed(x);
+  - platform: template
+    id: ha_precipitation_rate
+    name: "Simulated Precipitation Rate"
+    lambda: 'return 0.0f;'
+    on_value:
+      then:
+        - lambda: |-
+            weather::global_weather_engine.set_ha_precipitation_rate(x);
+
+binary_sensor:
+  - platform: sdl
+    name: "Key M (Mode Button)"
+    id: key_mode_btn
+    key: SDLK_m
+    on_press:
+      then:
+        - lambda: |-
+            id(ui_mode) = (id(ui_mode) % 3) + 1;
+            ESP_LOGI("button", "Cycled UI Mode to: %d", id(ui_mode));
+        - script.execute: apply_ui_mode
+
+  - platform: sdl
+    name: "Key W (Weather Button)"
+    id: key_weather_btn
+    key: SDLK_w
+    on_press:
+      then:
+        - lambda: |-
+            id(weather_mode) = (id(weather_mode) % 8) + 1;
+            weather::global_weather_engine.reset_manual_wind();
+            ESP_LOGI("button", "Cycled weather effect to: %d (%s)", id(weather_mode), weather::get_mode_name(id(weather_mode)));
+            if (id(ui_mode) != 2) {
+              id(ui_mode) = 2;
+              id(apply_ui_mode).execute();
+            } else {
+              id(show_osd).execute(weather::get_mode_name(id(weather_mode)));
+            }
+
+  - platform: sdl
+    name: "Key Space (Encoder Click)"
+    id: key_encoder_click
+    key: SDLK_SPACE
+    on_press:
+      then:
+        - lambda: |-
+            ESP_LOGI("button", "Simulated knob button press");
+            id(show_osd).execute("Knob Click");
+
+  - platform: sdl
+    name: "Key Right (Knob Clockwise)"
+    id: key_knob_cw
+    key: SDLK_RIGHT
+    on_press:
+      then:
+        - lambda: |-
+            if (id(ui_mode) != 2) {
+              id(ui_mode) = 2;
+              id(apply_ui_mode).execute();
+            } else {
+              id(weather_mode) = (id(weather_mode) % 8) + 1;
+              weather::global_weather_engine.reset_manual_wind();
+              id(show_osd).execute(weather::get_mode_name(id(weather_mode)));
+            }
+
+  - platform: sdl
+    name: "Key Left (Knob Counter-Clockwise)"
+    id: key_knob_ccw
+    key: SDLK_LEFT
+    on_press:
+      then:
+        - lambda: |-
+            if (id(ui_mode) != 2) {
+              id(ui_mode) = 2;
+              id(apply_ui_mode).execute();
+            } else {
+              id(weather_mode) = (id(weather_mode) == 1) ? 8 : id(weather_mode) - 1;
+              weather::global_weather_engine.reset_manual_wind();
+              id(show_osd).execute(weather::get_mode_name(id(weather_mode)));
+            }
+
+text_sensor:
+  - platform: template
+    id: weather_condition
+    name: "Simulated Weather Condition"
+    lambda: 'return std::string("sunny");'
+  - platform: template
+    id: sun_state
+    name: "Simulated Sun State"
+    lambda: 'return std::string("above_horizon");'
+
+display:
+  - platform: sdl
+    id: display_sdl
+    dimensions:
+      width: 128
+      height: 64
+    window_options:
+      resizable: true
+    auto_clear_enabled: false
+    update_interval: 16ms
+
+lvgl:
+  id: my_lvgl
+  displays: display_sdl
+  update_interval: 16ms
+  bg_color: black
+  theme:
+    dark_mode: true
+
+  top_layer:
+    widgets:
+      - canvas:
+          id: weather_canvas
+          width: 128
+          height: 64
+          transparent: true
+      - label:
+          id: osd_label
+          text: ""
+          styles: style_osd
+          align: center
+          hidden: true
+
+  pages:
+    - id: page_main
+      widgets:
+        - label:
+            text: "IN/OUT"
+            styles: style_small
+            align: top_left
+            x: 6
+            y: 8
+        - label:
+            text: "21.5°C"
+            id: indoor_temp_label
+            styles: style_medium
+            align: top_left
+            x: 6
+            y: 21
+        - label:
+            text: "18.2°C"
+            id: outdoor_temp_label
+            styles: style_medium
+            align: top_left
+            x: 6
+            y: 38
+        - label:
+            text: "12:00"
+            id: clock_label
+            styles: style_large
+            align: top_right
+            x: -6
+            y: 22
+
+    - id: page_blank
+
+interval:
+  - interval: 32ms
+    then:
+      - lambda: |-
+          id(anim_step)++;
+          weather::global_weather_engine.update(id(anim_step), id(weather_mode));
+          weather::global_weather_engine.render(id(weather_canvas), id(anim_step), id(weather_mode));
+
+script:
+  - id: show_osd
+    mode: restart
+    parameters:
+      message: string
+    then:
+      - lvgl.label.update:
+          id: osd_label
+          text: !lambda 'return message;'
+      - lvgl.widget.show: osd_label
+      - delay: 1s
+      - lvgl.widget.hide: osd_label
+
+  - id: apply_ui_mode
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return id(ui_mode) == 1 || id(ui_mode) == 2;'
+          then:
+            - lvgl.page.show: page_blank
+          else:
+            - lvgl.page.show: page_main
+      - script.execute:
+          id: show_osd
+          message: !lambda |-
+            if (id(ui_mode) == 1) return "Auto Showcase";
+            if (id(ui_mode) == 2) return str_sprintf("Manual: %s", weather::get_mode_name(id(weather_mode)));
+            return "Passive Weather";
