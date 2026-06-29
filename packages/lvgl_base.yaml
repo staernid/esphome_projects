@@ -1,0 +1,33 @@
+font:
+  - id: small
+    file: "gfonts://Roboto"
+    size: 10
+  - id: medium
+    file: "gfonts://Roboto"
+    size: 14
+  - id: large
+    file: "gfonts://Roboto"
+    size: 24
+
+lvgl:
+  style_definitions:
+    - id: style_large
+      text_font: large
+      bg_color: black
+    - id: style_medium
+      text_font: medium
+      bg_color: black
+    - id: style_small
+      text_font: small
+      bg_color: black
+    - id: style_osd
+      text_font: small
+      bg_color: black
+      bg_opa: cover
+      text_color: white
+      border_width: 1
+      border_color: white
+      pad_top: 2
+      pad_bottom: 2
+      pad_left: 6
+      pad_right: 6
