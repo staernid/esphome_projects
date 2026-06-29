@@ -1,0 +1,10 @@
+# Peripherals Package for C6 (Onboard WS2812 RGB LED & Hardware Outputs)
+light:
+  - platform: esp32_rmt_led_strip
+    rgb_order: GRB
+    pin: GPIO8
+    num_leds: 1
+    chipset: ws2812
+    name: "Onboard RGB Light"
+    id: onboard_led
+    default_transition_length: 0s

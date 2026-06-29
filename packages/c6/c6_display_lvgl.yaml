@@ -1,0 +1,217 @@
+# LVGL Display Engine & Rendering Loops Package for C6
+display:
+  - platform: ssd1306_i2c
+    i2c_id: i2c_1
+    model: SH1106_128X64
+    id: display_ssd1306_i2c_1
+    auto_clear_enabled: false
+    update_interval: 16ms
+    contrast: 0.0
+
+# Native LVGL UI Core Engine
+lvgl:
+  id: my_lvgl
+  displays: display_ssd1306_i2c_1
+
+  update_interval: 16ms
+
+  bg_color: black
+
+  theme:
+    dark_mode: true
+
+  top_layer:
+    widgets:
+      # Single pure algorithmic overlay canvas
+      - canvas:
+          id: weather_canvas
+          width: 128
+          height: 64
+          transparent: true
+      - label:
+          id: osd_label
+          text: ""
+          styles: style_osd
+          align: center
+          hidden: true
+
+  pages:
+    # --- UNIFIED SINGLE DISPLAY SCREEN (Mode 3: Live Weather) ---
+    - id: page_main
+      widgets:
+        - label:
+            text: "IN/OUT"
+            styles: style_small
+            align: top_left
+            x: 6
+            y: 8
+        - label:
+            text: "--.-°C"
+            id: indoor_temp_label
+            styles: style_medium
+            align: top_left
+            x: 6
+            y: 21
+        - label:
+            text: "--.-°C"
+            id: outdoor_temp_label
+            styles: style_medium
+            align: top_left
+            x: 6
+            y: 38
+        - label:
+            text: "--:--"
+            id: clock_label
+            styles: style_large
+            align: top_right
+            x: -6
+            y: 22
+
+    # --- BLANK SCREENSAVER PAGE (Mode 1 & Mode 2) ---
+    - id: page_blank
+
+    # --- MATRIX SYSTEM DIAGNOSTICS PAGE (Mode 4) ---
+    - id: page_diagnostics
+      widgets:
+        - label:
+            text: "SYS DIAGNOSTICS"
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 2
+        - label:
+            text: "FPS: --  CPU: --%"
+            id: diag_fps_cpu_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 16
+        - label:
+            text: "HEAP: --- KB"
+            id: diag_heap_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 29
+        - label:
+            text: "RSSI: --- dBm"
+            id: diag_rssi_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 42
+        - label:
+            text: "UP  : --:--:--"
+            id: diag_uptime_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 54
+
+interval:
+  # Clock update interval
+  - interval: 1s
+    then:
+      - lvgl.label.update:
+          id: clock_label
+          text: !lambda |-
+            return id(ha_time).now().strftime("%H:%M");
+
+  # Auto Showcase Cycler (Mode 1: screensaver)
+  - interval: 5s
+    then:
+      - lambda: |-
+          if (id(ui_mode) == 1) {
+            id(weather_mode) = (id(weather_mode) % 8) + 1;
+            ESP_LOGI("weather_showcase", "Auto Showcase cycled to weather_mode: %d", id(weather_mode));
+          }
+
+  # Telemetry refresh interval (Mode 4: Matrix Diagnostics)
+  - interval: 250ms
+    then:
+      - lambda: |-
+          if (id(ui_mode) != 4) return;
+      - lvgl.label.update:
+          id: diag_fps_cpu_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("FPS:%.1f CPU:%.0f%%", diag.get_fps(), diag.get_cpu_load());
+      - lvgl.label.update:
+          id: diag_heap_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("HEAP:%.1f KB free", diag.get_free_heap_kb());
+      - lvgl.label.update:
+          id: diag_rssi_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("RSSI: %d dBm", diag.get_wifi_rssi());
+      - lvgl.label.update:
+          id: diag_uptime_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("UP  : %s", diag.get_formatted_uptime().c_str());
+
+  # Render animation loop (~31.25 FPS)
+  - interval: 32ms
+    then:
+      - lambda: |-
+          id(anim_step)++;
+          weather::global_weather_engine.update(id(anim_step), id(weather_mode));
+          weather::global_weather_engine.render(id(weather_canvas), id(anim_step), id(weather_mode));
+
+          // Multi-mode WS2812 RGB Lightning Strobe Lighting Engine
+          bool is_flashing = weather::global_weather_engine.is_lightning_flashing();
+          if (is_flashing) {
+            // Electric White-Blue Lightning Strobe Flash
+            auto call = id(onboard_led)->turn_on();
+            call.set_rgb(1.0f, 1.0f, 1.0f);
+            call.set_brightness(0.8f);
+            call.set_transition_length(0);
+            call.perform();
+          } else {
+            auto call = id(onboard_led)->turn_off();
+            call.set_transition_length(0);
+            call.perform();
+          }
+
+script:
+  - id: show_osd
+    mode: restart
+    parameters:
+      message: string
+    then:
+      - lvgl.label.update:
+          id: osd_label
+          text: !lambda 'return message;'
+      - lvgl.widget.show: osd_label
+      - delay: 1s
+      - lvgl.widget.hide: osd_label
+
+  - id: apply_ui_mode
+    mode: restart
+    then:
+      - lambda: |-
+          if (id(ui_mode) == 3) {
+            id(weather_mode) = weather::get_mode_from_condition(id(weather_condition).state, id(sun_state).state);
+          }
+      - if:
+          condition:
+            lambda: 'return id(ui_mode) == 1 || id(ui_mode) == 2;'
+          then:
+            - lvgl.page.show: page_blank
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(ui_mode) == 4;'
+                then:
+                  - lvgl.page.show: page_diagnostics
+                else:
+                  - lvgl.page.show: page_main
+      - script.execute:
+          id: show_osd
+          message: !lambda |-
+            if (id(ui_mode) == 1) return "Auto Showcase";
+            if (id(ui_mode) == 2) return str_sprintf("Manual: %s", weather::get_mode_name(id(weather_mode)));
+            if (id(ui_mode) == 4) return "Matrix Diagnostics";
+            return "Passive Weather";

@@ -18,7 +18,7 @@ time:
 globals:
   - id: ui_mode
     type: int
-    initial_value: '3' # 1: Auto Showcase, 2: Manual Showcase, 3: Passive Weather
+    initial_value: '3' # 1: Auto Showcase, 2: Manual Showcase, 3: Passive Weather, 4: Matrix Diagnostics
   - id: weather_mode
     type: int
     initial_value: '1' # 1: Sunny, 2: Clear Night, 3: Cloudy, 4: Partly Cloudy, 5: Rainy, 6: Snowy, 7: Lightning, 8: Windy/Fog
@@ -42,7 +42,7 @@ esphome:
   name: ${name}
   friendly_name: ${friendly_name}
   includes:
-    - include/weather_engine.h
+    - include
   on_boot:
     priority: -100
     then:
@@ -85,8 +85,24 @@ binary_sensor:
     on_press:
       then:
         - lambda: |-
-            id(ui_mode) = (id(ui_mode) % 3) + 1;
+            if (id(ui_mode) == 4) id(ui_mode) = 1;
+            else id(ui_mode) = (id(ui_mode) % 3) + 1;
             ESP_LOGI("button", "Cycled UI Mode to: %d", id(ui_mode));
+        - script.execute: apply_ui_mode
+
+  - platform: sdl
+    name: "Key D (Matrix Diagnostics Toggle)"
+    id: key_diag_btn
+    key: SDLK_d
+    on_press:
+      then:
+        - lambda: |-
+            if (id(ui_mode) == 4) {
+              id(ui_mode) = 3;
+            } else {
+              id(ui_mode) = 4;
+            }
+            ESP_LOGI("button", "Toggled Matrix Diagnostics Mode: %d", id(ui_mode));
         - script.execute: apply_ui_mode
 
   - platform: sdl
@@ -166,8 +182,13 @@ display:
       height: 64
     window_options:
       resizable: true
+      borderless: false
+      always_on_top: false
+      fullscreen: false
+      skip_taskbar: false
     auto_clear_enabled: false
     update_interval: 16ms
+    sdl_options: "-I/usr/include/SDL2 -D_GNU_SOURCE=1 -D_REENTRANT -lSDL2"
 
 lvgl:
   id: my_lvgl
@@ -224,7 +245,71 @@ lvgl:
 
     - id: page_blank
 
+    # --- MATRIX SYSTEM DIAGNOSTICS PAGE (Mode 4) ---
+    - id: page_diagnostics
+      widgets:
+        - label:
+            text: "SYS DIAGNOSTICS"
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 2
+        - label:
+            text: "FPS: --  CPU: --%"
+            id: diag_fps_cpu_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 16
+        - label:
+            text: "HEAP: --- KB"
+            id: diag_heap_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 29
+        - label:
+            text: "RSSI: --- dBm"
+            id: diag_rssi_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 42
+        - label:
+            text: "UP  : --:--:--"
+            id: diag_uptime_label
+            styles: style_small
+            align: top_left
+            x: 4
+            y: 54
+
 interval:
+  # Telemetry refresh interval (Mode 4: Matrix Diagnostics)
+  - interval: 250ms
+    then:
+      - lambda: |-
+          if (id(ui_mode) != 4) return;
+      - lvgl.label.update:
+          id: diag_fps_cpu_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("FPS:%.1f CPU:%.0f%%", diag.get_fps(), diag.get_cpu_load());
+      - lvgl.label.update:
+          id: diag_heap_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("HEAP:%.1f KB free", diag.get_free_heap_kb());
+      - lvgl.label.update:
+          id: diag_rssi_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("RSSI: %d dBm", diag.get_wifi_rssi());
+      - lvgl.label.update:
+          id: diag_uptime_label
+          text: !lambda |-
+            auto &diag = weather::global_weather_engine.get_diagnostics();
+            return str_sprintf("UP  : %s", diag.get_formatted_uptime().c_str());
+
   - interval: 32ms
     then:
       - lambda: |-
@@ -254,10 +339,17 @@ script:
           then:
             - lvgl.page.show: page_blank
           else:
-            - lvgl.page.show: page_main
+            - if:
+                condition:
+                  lambda: 'return id(ui_mode) == 4;'
+                then:
+                  - lvgl.page.show: page_diagnostics
+                else:
+                  - lvgl.page.show: page_main
       - script.execute:
           id: show_osd
           message: !lambda |-
             if (id(ui_mode) == 1) return "Auto Showcase";
             if (id(ui_mode) == 2) return str_sprintf("Manual: %s", weather::get_mode_name(id(weather_mode)));
+            if (id(ui_mode) == 4) return "Matrix Diagnostics";
             return "Passive Weather";
