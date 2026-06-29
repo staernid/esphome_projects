@@ -19,6 +19,9 @@ globals:
   - id: weather_mode
     type: int
     initial_value: '1' # 1: Sunny, 2: Clear Night, 3: Cloudy, 4: Partly Cloudy, 5: Rainy, 6: Snowy, 7: Lightning, 8: Windy/Fog
+  - id: current_page
+    type: int
+    initial_value: '1' # 1: Page One, 2: Page Two
   - id: anim_step
     type: int
     initial_value: '0'
@@ -43,203 +46,12 @@ globals:
   - id: meteor_y
     type: float
     initial_value: '0.0'
-  # --- 16 Dynamic Hardware Particle Registry ---
-  - id: p1_x
-    type: float
-    initial_value: '5.0'
-  - id: p1_y
-    type: float
-    initial_value: '0.0'
-  - id: p1_w
-    type: int
-    initial_value: '1'
-  - id: p1_h
-    type: int
-    initial_value: '5'
-  - id: p2_x
-    type: float
-    initial_value: '13.0'
-  - id: p2_y
-    type: float
-    initial_value: '12.0'
-  - id: p2_w
-    type: int
-    initial_value: '1'
-  - id: p2_h
-    type: int
-    initial_value: '5'
-  - id: p3_x
-    type: float
-    initial_value: '21.0'
-  - id: p3_y
-    type: float
-    initial_value: '24.0'
-  - id: p3_w
-    type: int
-    initial_value: '1'
-  - id: p3_h
-    type: int
-    initial_value: '5'
-  - id: p4_x
-    type: float
-    initial_value: '29.0'
-  - id: p4_y
-    type: float
-    initial_value: '36.0'
-  - id: p4_w
-    type: int
-    initial_value: '1'
-  - id: p4_h
-    type: int
-    initial_value: '5'
-  - id: p5_x
-    type: float
-    initial_value: '37.0'
-  - id: p5_y
-    type: float
-    initial_value: '48.0'
-  - id: p5_w
-    type: int
-    initial_value: '1'
-  - id: p5_h
-    type: int
-    initial_value: '5'
-  - id: p6_x
-    type: float
-    initial_value: '45.0'
-  - id: p6_y
-    type: float
-    initial_value: '8.0'
-  - id: p6_w
-    type: int
-    initial_value: '1'
-  - id: p6_h
-    type: int
-    initial_value: '5'
-  - id: p7_x
-    type: float
-    initial_value: '53.0'
-  - id: p7_y
-    type: float
-    initial_value: '20.0'
-  - id: p7_w
-    type: int
-    initial_value: '1'
-  - id: p7_h
-    type: int
-    initial_value: '5'
-  - id: p8_x
-    type: float
-    initial_value: '61.0'
-  - id: p8_y
-    type: float
-    initial_value: '32.0'
-  - id: p8_w
-    type: int
-    initial_value: '1'
-  - id: p8_h
-    type: int
-    initial_value: '5'
-  - id: p9_x
-    type: float
-    initial_value: '69.0'
-  - id: p9_y
-    type: float
-    initial_value: '44.0'
-  - id: p9_w
-    type: int
-    initial_value: '1'
-  - id: p9_h
-    type: int
-    initial_value: '5'
-  - id: p10_x
-    type: float
-    initial_value: '77.0'
-  - id: p10_y
-    type: float
-    initial_value: '4.0'
-  - id: p10_w
-    type: int
-    initial_value: '1'
-  - id: p10_h
-    type: int
-    initial_value: '5'
-  - id: p11_x
-    type: float
-    initial_value: '85.0'
-  - id: p11_y
-    type: float
-    initial_value: '16.0'
-  - id: p11_w
-    type: int
-    initial_value: '1'
-  - id: p11_h
-    type: int
-    initial_value: '5'
-  - id: p12_x
-    type: float
-    initial_value: '93.0'
-  - id: p12_y
-    type: float
-    initial_value: '28.0'
-  - id: p12_w
-    type: int
-    initial_value: '1'
-  - id: p12_h
-    type: int
-    initial_value: '5'
-  - id: p13_x
-    type: float
-    initial_value: '101.0'
-  - id: p13_y
-    type: float
-    initial_value: '40.0'
-  - id: p13_w
-    type: int
-    initial_value: '1'
-  - id: p13_h
-    type: int
-    initial_value: '5'
-  - id: p14_x
-    type: float
-    initial_value: '109.0'
-  - id: p14_y
-    type: float
-    initial_value: '52.0'
-  - id: p14_w
-    type: int
-    initial_value: '1'
-  - id: p14_h
-    type: int
-    initial_value: '5'
-  - id: p15_x
-    type: float
-    initial_value: '117.0'
-  - id: p15_y
-    type: float
-    initial_value: '10.0'
-  - id: p15_w
-    type: int
-    initial_value: '1'
-  - id: p15_h
-    type: int
-    initial_value: '5'
-  - id: p16_x
-    type: float
-    initial_value: '123.0'
-  - id: p16_y
-    type: float
-    initial_value: '30.0'
-  - id: p16_w
-    type: int
-    initial_value: '1'
-  - id: p16_h
-    type: int
-    initial_value: '5'
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
+  includes:
+    - include/weather_engine.h
   on_boot:
     priority: -100
     then:
@@ -292,6 +104,60 @@ sensor:
             id: outdoor_temp_label
             text: !lambda |-
               return str_sprintf("%.1f°C", x);
+
+  - platform: rotary_encoder
+    name: "Weather Mode Selector"
+    id: weather_mode_encoder
+    pin_a:
+      number: GPIO18
+      mode:
+        input: true
+        pullup: true
+    pin_b:
+      number: GPIO19
+      mode:
+        input: true
+        pullup: true
+    on_clockwise:
+      - lambda: |-
+          id(debug_mode) = false;
+          id(weather_mode) = (id(weather_mode) % 8) + 1;
+          ESP_LOGI("rotary_encoder", "Manual weather mode set to: %d", id(weather_mode));
+    on_anticlockwise:
+      - lambda: |-
+          id(debug_mode) = false;
+          id(weather_mode) = (id(weather_mode) == 1) ? 8 : id(weather_mode) - 1;
+          ESP_LOGI("rotary_encoder", "Manual weather mode set to: %d", id(weather_mode));
+
+binary_sensor:
+  - platform: gpio
+    name: "Display Navigation Button"
+    id: display_button
+    pin:
+      number: GPIO20
+      mode:
+        input: true
+        pullup: true
+    on_click:
+      - min_length: 50ms
+        max_length: 500ms
+        then:
+          - if:
+              condition:
+                lambda: 'return id(current_page) == 1;'
+              then:
+                - lvgl.page.show: page_two
+                - lambda: 'id(current_page) = 2;'
+              else:
+                - lvgl.page.show: page_one
+                - lambda: 'id(current_page) = 1;'
+          - script.execute: auto_scroll_pages
+      - min_length: 1000ms
+        max_length: 5000ms
+        then:
+          - lambda: |-
+              id(debug_mode) = !id(debug_mode);
+              ESP_LOGI("button", "Toggled debug showcase mode: %s", id(debug_mode) ? "ENABLED" : "DISABLED");
 
 text_sensor:
   - platform: homeassistant
@@ -414,474 +280,18 @@ interval:
 
   - interval: 33ms
     then:
-      # 1. Hardware Particle Physics & Dynamic Algorithmic Engine (160MHz RISC-V Compute)
       - lambda: |-
           id(anim_step)++;
-          int step = id(anim_step);
-          int mode = id(weather_mode);
-
-          // Update Dual-Layer Parallax Cloud Drift (Foreground & Background)
-          if (mode == 3 || mode == 4 || mode == 7) {
-            id(cloud_x) += 0.5f;
-            if (id(cloud_x) > 130.0f) id(cloud_x) = -30.0f;
-            id(cloud2_x) += 0.25f;
-            if (id(cloud2_x) > 130.0f) id(cloud2_x) = -45.0f;
-          }
-
-          // Update Lightning Strobe & Procedural Flash Mechanics
-          if (mode == 7) {
-            if (id(lightning_flash) > 0) {
-              id(lightning_flash)--;
-            } else if ((step % 45) == 0 || (rand() % 60 == 0)) {
-              id(lightning_flash) = 3;
-              id(lightning_x) = 30.0f + (rand() % 68);
-            }
-          } else {
-            id(lightning_flash) = 0;
-          }
-
-          // Update Night Meteor / Shooting Star Simulation
-          if (mode == 2) {
-            if (!id(meteor_active) && (step % 110 == 0 || rand() % 140 == 0)) {
-              id(meteor_active) = true;
-              id(meteor_x) = 120.0f;
-              id(meteor_y) = 2.0f;
-            }
-            if (id(meteor_active)) {
-              id(meteor_x) -= 5.0f;
-              id(meteor_y) += 2.8f;
-              if (id(meteor_x) < 0.0f || id(meteor_y) > 60.0f) {
-                id(meteor_active) = false;
-              }
-            }
-          }
-
-          // Physics Array Binding for 16 Hardware Particles
-          auto update_p = [&](int idx, float vx, float vy, int w, int h, int reset_type) {
-            float x = 0, y = 0;
-            switch(idx) {
-              case 1: x = id(p1_x); y = id(p1_y); break; case 2: x = id(p2_x); y = id(p2_y); break;
-              case 3: x = id(p3_x); y = id(p3_y); break; case 4: x = id(p4_x); y = id(p4_y); break;
-              case 5: x = id(p5_x); y = id(p5_y); break; case 6: x = id(p6_x); y = id(p6_y); break;
-              case 7: x = id(p7_x); y = id(p7_y); break; case 8: x = id(p8_x); y = id(p8_y); break;
-              case 9: x = id(p9_x); y = id(p9_y); break; case 10: x = id(p10_x); y = id(p10_y); break;
-              case 11: x = id(p11_x); y = id(p11_y); break; case 12: x = id(p12_x); y = id(p12_y); break;
-              case 13: x = id(p13_x); y = id(p13_y); break; case 14: x = id(p14_x); y = id(p14_y); break;
-              case 15: x = id(p15_x); y = id(p15_y); break; case 16: x = id(p16_x); y = id(p16_y); break;
-            }
-            x += vx; y += vy;
-            if (reset_type == 1 && y > 60) { y = 0; x = (step * 17 + idx * 11) % 120; }
-            else if (reset_type == 2 && y > 60) { y = 0; x = (step * 19 + idx * 13) % 120; }
-            else if (reset_type == 3 && x > 124) { x = 0; y = 6 + (idx * 4) % 48; }
-
-            switch(idx) {
-              case 1: id(p1_x)=x; id(p1_y)=y; id(p1_w)=w; id(p1_h)=h; break;
-              case 2: id(p2_x)=x; id(p2_y)=y; id(p2_w)=w; id(p2_h)=h; break;
-              case 3: id(p3_x)=x; id(p3_y)=y; id(p3_w)=w; id(p3_h)=h; break;
-              case 4: id(p4_x)=x; id(p4_y)=y; id(p4_w)=w; id(p4_h)=h; break;
-              case 5: id(p5_x)=x; id(p5_y)=y; id(p5_w)=w; id(p5_h)=h; break;
-              case 6: id(p6_x)=x; id(p6_y)=y; id(p6_w)=w; id(p6_h)=h; break;
-              case 7: id(p7_x)=x; id(p7_y)=y; id(p7_w)=w; id(p7_h)=h; break;
-              case 8: id(p8_x)=x; id(p8_y)=y; id(p8_w)=w; id(p8_h)=h; break;
-              case 9: id(p9_x)=x; id(p9_y)=y; id(p9_w)=w; id(p9_h)=h; break;
-              case 10: id(p10_x)=x; id(p10_y)=y; id(p10_w)=w; id(p10_h)=h; break;
-              case 11: id(p11_x)=x; id(p11_y)=y; id(p11_w)=w; id(p11_h)=h; break;
-              case 12: id(p12_x)=x; id(p12_y)=y; id(p12_w)=w; id(p12_h)=h; break;
-              case 13: id(p13_x)=x; id(p13_y)=y; id(p13_w)=w; id(p13_h)=h; break;
-              case 14: id(p14_x)=x; id(p14_y)=y; id(p14_w)=w; id(p14_h)=h; break;
-              case 15: id(p15_x)=x; id(p15_y)=y; id(p15_w)=w; id(p15_h)=h; break;
-              case 16: id(p16_x)=x; id(p16_y)=y; id(p16_w)=w; id(p16_h)=h; break;
-            }
-          };
-
-          if (mode == 5 || mode == 7) { // Torrential Rain & Driving Storm
-            float vy_base = (mode == 7) ? 5.8f : 4.6f;
-            for (int i = 1; i <= 16; i++) {
-              update_p(i, 0.6f, vy_base + (i % 3) * 0.4f, 1, 5, 1);
-            }
-          } else if (mode == 6) { // Turbulent Snow Flurry
-            for (int i = 1; i <= 16; i++) {
-              float sway = sinf(step * 0.08f + i * 0.7f) * 0.7f + cosf(step * 0.14f + i * 0.3f) * 0.3f;
-              int sz = (i <= 4) ? 3 : ((i <= 10) ? 2 : 1);
-              update_p(i, sway, 0.8f + (i % 4) * 0.15f, sz, sz, 2);
-            }
-          } else if (mode == 8) { // Sweeping Wind Gusts & Swirling Leaves
-            for (int i = 1; i <= 16; i++) {
-              if (i <= 8) { // Fast Stream Vectors
-                update_p(i, 4.8f + (i % 4) * 0.5f, 0.0f, 16 + (i % 3) * 6, 1, 3);
-              } else { // Swirling Leaf Particles
-                float swirl = sinf(step * 0.2f + i) * 1.8f;
-                update_p(i, 3.2f, swirl, 2, 2, 3);
-              }
-            }
-          } else if (mode == 1 || mode == 4) { // Sunny Atmospheric Heat Shimmer Motes
-            for (int i = 1; i <= 16; i++) {
-              float shimmer_x = sinf(step * 0.1f + i) * 0.5f - 0.2f;
-              update_p(i, shimmer_x, -0.4f, 1, 1, 1);
-            }
-          }
-
-      # 2. Clear canvas
-      - lvgl.canvas.fill:
-          id: weather_canvas
-          color: black
-          opa: TRANSP
-
-      # 3. Algorithmic Rendering Engine Showcase
-      # --- SUNNY / PARTLY CLOUDY (Mode 1 & 4) ---
-      - if:
-          condition:
-            lambda: 'return id(weather_mode) == 1 || id(weather_mode) == 4;'
-          then:
-            # Core Sun Circle
-            - lvgl.canvas.draw_arc:
-                id: weather_canvas
-                x: 114
-                y: 14
-                radius: 5
-                start_angle: 0
-                end_angle: 360
-                color: white
-                width: 5
-            # Trigonometric Orbiting Ray Flares (4 rotating arc flares)
-            - lvgl.canvas.draw_arc:
-                id: weather_canvas
-                x: 114
-                y: 14
-                radius: 10
-                start_angle: !lambda 'return (id(anim_step) * 5 + 0) % 360;'
-                end_angle: !lambda 'return (id(anim_step) * 5 + 35) % 360;'
-                color: white
-                width: 2
-            - lvgl.canvas.draw_arc:
-                id: weather_canvas
-                x: 114
-                y: 14
-                radius: 10
-                start_angle: !lambda 'return (id(anim_step) * 5 + 90) % 360;'
-                end_angle: !lambda 'return (id(anim_step) * 5 + 125) % 360;'
-                color: white
-                width: 2
-            - lvgl.canvas.draw_arc:
-                id: weather_canvas
-                x: 114
-                y: 14
-                radius: 10
-                start_angle: !lambda 'return (id(anim_step) * 5 + 180) % 360;'
-                end_angle: !lambda 'return (id(anim_step) * 5 + 215) % 360;'
-                color: white
-                width: 2
-            - lvgl.canvas.draw_arc:
-                id: weather_canvas
-                x: 114
-                y: 14
-                radius: 10
-                start_angle: !lambda 'return (id(anim_step) * 5 + 270) % 360;'
-                end_angle: !lambda 'return (id(anim_step) * 5 + 305) % 360;'
-                color: white
-                width: 2
-
-      # --- CLEAR NIGHT (Mode 2) ---
-      - if:
-          condition:
-            lambda: 'return id(weather_mode) == 2;'
-          then:
-            # Sharp Crescent Moon Arcs
-            - lvgl.canvas.draw_arc:
-                id: weather_canvas
-                x: 114
-                y: 14
-                radius: 8
-                start_angle: 110
-                end_angle: 310
-                color: white
-                width: 2
-            # Algorithmic Twinkling Starfield (Individual Conditional Star Points)
-            - if:
-                condition:
-                  lambda: 'return (id(anim_step) % 10 < 7);'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: 88
-                      y: 8
-                      width: 1
-                      height: 1
-                      bg_color: white
-            - if:
-                condition:
-                  lambda: 'return ((id(anim_step) + 3) % 12 < 8);'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: 98
-                      y: 20
-                      width: 1
-                      height: 1
-                      bg_color: white
-            - if:
-                condition:
-                  lambda: 'return ((id(anim_step) + 7) % 9 < 6);'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: 106
-                      y: 32
-                      width: 1
-                      height: 1
-                      bg_color: white
-            - if:
-                condition:
-                  lambda: 'return ((id(anim_step) + 2) % 14 < 10);'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: 72
-                      y: 14
-                      width: 1
-                      height: 1
-                      bg_color: white
-            - if:
-                condition:
-                  lambda: 'return ((id(anim_step) + 5) % 11 < 7);'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: 60
-                      y: 26
-                      width: 1
-                      height: 1
-                      bg_color: white
-            - if:
-                condition:
-                  lambda: 'return ((id(anim_step) + 8) % 13 < 9);'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: 80
-                      y: 38
-                      width: 1
-                      height: 1
-                      bg_color: white
-            - if:
-                condition:
-                  lambda: 'return ((id(anim_step) + 1) % 15 < 11);'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: 45
-                      y: 10
-                      width: 1
-                      height: 1
-                      bg_color: white
-            - if:
-                condition:
-                  lambda: 'return ((id(anim_step) + 9) % 8 < 5);'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: 30
-                      y: 22
-                      width: 1
-                      height: 1
-                      bg_color: white
-            # Shooting Star / Meteor Streak
-            - if:
-                condition:
-                  lambda: 'return id(meteor_active) && id(meteor_x) >= 0.0f && id(meteor_y) >= 0.0f;'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: !lambda 'return (int)id(meteor_x);'
-                      y: !lambda 'return (int)id(meteor_y);'
-                      width: 4
-                      height: 2
-                      bg_color: white
-
-      # --- DRIFTING PARALLAX CLOUDS (Mode 3, 4, 7) ---
-      - if:
-          condition:
-            lambda: 'return id(weather_mode) == 3 || id(weather_mode) == 4 || id(weather_mode) == 7;'
-          then:
-            # Background Slow Cloud (only draw when x >= 0)
-            - if:
-                condition:
-                  lambda: 'return id(cloud2_x) >= 0.0f;'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: !lambda 'return (int)id(cloud2_x);'
-                      y: 2
-                      width: 20
-                      height: 5
-                      radius: 2
-                      bg_color: white
-            # Foreground Main Cumulus Cloud (only draw when x >= 0)
-            - if:
-                condition:
-                  lambda: 'return id(cloud_x) >= 0.0f;'
-                then:
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: !lambda 'return (int)id(cloud_x);'
-                      y: 6
-                      width: 28
-                      height: 8
-                      radius: 4
-                      bg_color: white
-                  - lvgl.canvas.draw_rectangle:
-                      id: weather_canvas
-                      x: !lambda 'return (int)(id(cloud_x) + 7);'
-                      y: 2
-                      width: 14
-                      height: 10
-                      radius: 5
-                      bg_color: white
-
-      # --- PROCEDURAL LIGHTNING BOLTS (Mode 7) ---
-      - if:
-          condition:
-            lambda: 'return id(weather_mode) == 7 && id(lightning_flash) > 0;'
-          then:
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(124, (int)id(lightning_x)));'
-                y: 12
-                width: 2
-                height: 14
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(124, (int)(id(lightning_x) + 4)));'
-                y: 24
-                width: 2
-                height: 16
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(124, (int)(id(lightning_x) - 2)));'
-                y: 38
-                width: 2
-                height: 18
-                bg_color: white
-
-      # --- 16 DYNAMIC HARDWARE PARTICLES (Mode 5, 6, 7, 8) ---
-      - if:
-          condition:
-            lambda: 'return id(weather_mode) >= 5 || id(weather_mode) == 1 || id(weather_mode) == 4;'
-          then:
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p1_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p1_y)));'
-                width: !lambda 'return id(p1_w);'
-                height: !lambda 'return id(p1_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p2_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p2_y)));'
-                width: !lambda 'return id(p2_w);'
-                height: !lambda 'return id(p2_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p3_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p3_y)));'
-                width: !lambda 'return id(p3_w);'
-                height: !lambda 'return id(p3_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p4_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p4_y)));'
-                width: !lambda 'return id(p4_w);'
-                height: !lambda 'return id(p4_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p5_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p5_y)));'
-                width: !lambda 'return id(p5_w);'
-                height: !lambda 'return id(p5_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p6_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p6_y)));'
-                width: !lambda 'return id(p6_w);'
-                height: !lambda 'return id(p6_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p7_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p7_y)));'
-                width: !lambda 'return id(p7_w);'
-                height: !lambda 'return id(p7_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p8_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p8_y)));'
-                width: !lambda 'return id(p8_w);'
-                height: !lambda 'return id(p8_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p9_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p9_y)));'
-                width: !lambda 'return id(p9_w);'
-                height: !lambda 'return id(p9_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p10_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p10_y)));'
-                width: !lambda 'return id(p10_w);'
-                height: !lambda 'return id(p10_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p11_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p11_y)));'
-                width: !lambda 'return id(p11_w);'
-                height: !lambda 'return id(p11_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p12_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p12_y)));'
-                width: !lambda 'return id(p12_w);'
-                height: !lambda 'return id(p12_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p13_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p13_y)));'
-                width: !lambda 'return id(p13_w);'
-                height: !lambda 'return id(p13_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p14_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p14_y)));'
-                width: !lambda 'return id(p14_w);'
-                height: !lambda 'return id(p14_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p15_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p15_y)));'
-                width: !lambda 'return id(p15_w);'
-                height: !lambda 'return id(p15_h);'
-                bg_color: white
-            - lvgl.canvas.draw_rectangle:
-                id: weather_canvas
-                x: !lambda 'return std::max(0, std::min(127, (int)id(p16_x)));'
-                y: !lambda 'return std::max(0, std::min(63, (int)id(p16_y)));'
-                width: !lambda 'return id(p16_w);'
-                height: !lambda 'return id(p16_h);'
-                bg_color: white
+          weather::global_weather_engine.update(
+            id(anim_step), id(weather_mode), id(cloud_x), id(cloud2_x),
+            id(lightning_flash), id(lightning_x), id(meteor_active),
+            id(meteor_x), id(meteor_y)
+          );
+          weather::global_weather_engine.render(
+            id(weather_canvas), id(anim_step), id(weather_mode),
+            id(cloud_x), id(cloud2_x), id(lightning_flash), id(lightning_x),
+            id(meteor_active), id(meteor_x), id(meteor_y)
+          );
 
 # Automation handling utilizing native page actions
 script:
@@ -895,5 +305,7 @@ script:
             - delay: 6s
             # Fixed: Using verified page transition tracking actions
             - lvgl.page.show: page_two
+            - lambda: "id(current_page) = 2;"
             - delay: 6s
             - lvgl.page.show: page_one
+            - lambda: "id(current_page) = 1;"
