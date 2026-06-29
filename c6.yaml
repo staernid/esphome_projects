@@ -1,5 +1,5 @@
 # Board: ESP32-C6 DevKitC-1 (Espressif)
-# Definition: definitions/boards/esp32-c6-devkitc-1/manifest.yaml
+# Definition: definitions/boards/esp32-c3-supermini/manifest.yaml
 
 substitutions:
   name: "c6"
@@ -13,39 +13,15 @@ packages:
   common: !include common.yaml
 
 globals:
-  - id: debug_mode
-    type: bool
-    initial_value: 'true' # Set to true to automatically cycle through all 8 weather animations every 5s
+  - id: ui_mode
+    type: int
+    initial_value: '3' # 1: Auto Showcase (Screensaver), 2: Manual Showcase (Interactive Knob), 3: Passive Weather (Unified Live Screen)
   - id: weather_mode
     type: int
     initial_value: '1' # 1: Sunny, 2: Clear Night, 3: Cloudy, 4: Partly Cloudy, 5: Rainy, 6: Snowy, 7: Lightning, 8: Windy/Fog
-  - id: current_page
-    type: int
-    initial_value: '1' # 1: Page One, 2: Page Two
   - id: anim_step
-    type: int
+    type: uint32_t
     initial_value: '0'
-  - id: cloud_x
-    type: float
-    initial_value: '-35.0'
-  - id: cloud2_x
-    type: float
-    initial_value: '-75.0'
-  - id: lightning_flash
-    type: int
-    initial_value: '0'
-  - id: lightning_x
-    type: float
-    initial_value: '64.0'
-  - id: meteor_active
-    type: bool
-    initial_value: 'false'
-  - id: meteor_x
-    type: float
-    initial_value: '0.0'
-  - id: meteor_y
-    type: float
-    initial_value: '0.0'
 
 esphome:
   name: ${name}
@@ -55,7 +31,7 @@ esphome:
   on_boot:
     priority: -100
     then:
-      - script.execute: auto_scroll_pages
+      - script.execute: apply_ui_mode
 
 esp32:
   variant: esp32c6
@@ -78,7 +54,7 @@ font:
     size: 14
   - id: large
     file: "gfonts://Roboto"
-    size: 28
+    size: 24
 
 # Data ingestion from Home Assistant
 sensor:
@@ -120,44 +96,37 @@ sensor:
         pullup: true
     on_clockwise:
       - lambda: |-
-          id(debug_mode) = false;
+          id(ui_mode) = 2; // Switch to Manual Showcase Mode
           id(weather_mode) = (id(weather_mode) % 8) + 1;
-          ESP_LOGI("rotary_encoder", "Manual weather mode set to: %d", id(weather_mode));
+          weather::global_weather_engine.trigger_gust(5.5f);
+          ESP_LOGI("rotary_encoder", "Manual Showcase mode set to: %d (Gust applied)", id(weather_mode));
+      - script.execute: apply_ui_mode
     on_anticlockwise:
       - lambda: |-
-          id(debug_mode) = false;
+          id(ui_mode) = 2; // Switch to Manual Showcase Mode
           id(weather_mode) = (id(weather_mode) == 1) ? 8 : id(weather_mode) - 1;
-          ESP_LOGI("rotary_encoder", "Manual weather mode set to: %d", id(weather_mode));
+          weather::global_weather_engine.trigger_gust(-5.5f);
+          ESP_LOGI("rotary_encoder", "Manual Showcase mode set to: %d (Gust applied)", id(weather_mode));
+      - script.execute: apply_ui_mode
 
 binary_sensor:
   - platform: gpio
-    name: "Display Navigation Button"
+    name: "Display Mode Button"
     id: display_button
     pin:
       number: GPIO20
       mode:
         input: true
         pullup: true
+      inverted: true
     on_click:
       - min_length: 50ms
-        max_length: 500ms
-        then:
-          - if:
-              condition:
-                lambda: 'return id(current_page) == 1;'
-              then:
-                - lvgl.page.show: page_two
-                - lambda: 'id(current_page) = 2;'
-              else:
-                - lvgl.page.show: page_one
-                - lambda: 'id(current_page) = 1;'
-          - script.execute: auto_scroll_pages
-      - min_length: 1000ms
-        max_length: 5000ms
+        max_length: 800ms
         then:
           - lambda: |-
-              id(debug_mode) = !id(debug_mode);
-              ESP_LOGI("button", "Toggled debug showcase mode: %s", id(debug_mode) ? "ENABLED" : "DISABLED");
+              id(ui_mode) = (id(ui_mode) % 3) + 1;
+              ESP_LOGI("button", "Cycled UI Mode to: %d", id(ui_mode));
+          - script.execute: apply_ui_mode
 
 text_sensor:
   - platform: homeassistant
@@ -167,7 +136,7 @@ text_sensor:
     on_value:
       then:
         - lambda: |-
-            if (!id(debug_mode)) {
+            if (id(ui_mode) == 3) {
               std::string cond = x;
               if (cond == "sunny") id(weather_mode) = 1;
               else if (cond == "clear-night") id(weather_mode) = 2;
@@ -178,6 +147,17 @@ text_sensor:
               else if (cond == "lightning" || cond == "lightning-rainy") id(weather_mode) = 7;
               else if (cond == "windy" || cond == "fog") id(weather_mode) = 8;
               else id(weather_mode) = 1;
+            }
+
+  - platform: homeassistant
+    id: sun_state
+    entity_id: "sun.sun"
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            if (id(ui_mode) == 3 && id(weather_condition).state == "sunny" && x == "below_horizon") {
+              id(weather_mode) = 2; // Auto-shift clear day to clear night when sun is below horizon
             }
 
 display:
@@ -221,44 +201,39 @@ lvgl:
           transparent: true
 
   pages:
-    # --- PAGE 1: CLOCK & INDOOR TEMP ---
-    - id: page_one
+    # --- UNIFIED SINGLE DISPLAY SCREEN (Mode 3: Live Weather) ---
+    - id: page_main
       widgets:
         - label:
-            text: "INDOOR"
+            text: "IN/OUT"
             styles: style_small
             align: top_left
             x: 6
-            y: 16
+            y: 9
         - label:
             text: "--.-°C"
             id: indoor_temp_label
             styles: style_medium
             align: top_left
             x: 6
-            y: 28
+            y: 23
+        - label:
+            text: "--.-°C"
+            id: outdoor_temp_label
+            styles: style_medium
+            align: top_left
+            x: 6
+            y: 41
         - label:
             text: "--:--"
             id: clock_label
             styles: style_large
             align: top_right
             x: -6
-            y: 28
+            y: 24
 
-    # --- PAGE 2: OUTDOOR FORECAST ---
-    - id: page_two
-      widgets:
-        - label:
-            text: "OUTSIDE"
-            styles: style_small
-            align: top_mid
-            y: 4
-        - label:
-            text: "--.-°C"
-            id: outdoor_temp_label
-            styles: style_large
-            align: center
-            y: -4
+    # --- BLANK SCREENSAVER PAGE (Mode 1 & Mode 2) ---
+    - id: page_blank
 
 interval:
   # Clock update interval
@@ -269,43 +244,31 @@ interval:
           text: !lambda |-
             return id(ha_time).now().strftime("%H:%M");
 
-  # Debug Mode Showcase Cycler (Cycles through weather_mode 1..8 every 5s)
+  # Auto Showcase Cycler (Mode 1: screensaver)
   - interval: 5s
     then:
       - lambda: |-
-          if (id(debug_mode)) {
+          if (id(ui_mode) == 1) {
             id(weather_mode) = (id(weather_mode) % 8) + 1;
-            ESP_LOGI("weather_debug", "Cycled showcase to weather_mode: %d", id(weather_mode));
+            ESP_LOGI("weather_showcase", "Auto Showcase cycled to weather_mode: %d", id(weather_mode));
           }
 
-  - interval: 33ms
+  # Render animation loop (~31.25 FPS)
+  - interval: 32ms
     then:
       - lambda: |-
           id(anim_step)++;
-          weather::global_weather_engine.update(
-            id(anim_step), id(weather_mode), id(cloud_x), id(cloud2_x),
-            id(lightning_flash), id(lightning_x), id(meteor_active),
-            id(meteor_x), id(meteor_y)
-          );
-          weather::global_weather_engine.render(
-            id(weather_canvas), id(anim_step), id(weather_mode),
-            id(cloud_x), id(cloud2_x), id(lightning_flash), id(lightning_x),
-            id(meteor_active), id(meteor_x), id(meteor_y)
-          );
+          weather::global_weather_engine.update(id(anim_step), id(weather_mode));
+          weather::global_weather_engine.render(id(weather_canvas), id(anim_step), id(weather_mode));
 
 # Automation handling utilizing native page actions
 script:
-  - id: auto_scroll_pages
-    mode: restart
+  - id: apply_ui_mode
     then:
-      - while:
+      - if:
           condition:
-            lambda: "return true;"
+            lambda: 'return id(ui_mode) == 1 || id(ui_mode) == 2;'
           then:
-            - delay: 6s
-            # Fixed: Using verified page transition tracking actions
-            - lvgl.page.show: page_two
-            - lambda: "id(current_page) = 2;"
-            - delay: 6s
-            - lvgl.page.show: page_one
-            - lambda: "id(current_page) = 1;"
+            - lvgl.page.show: page_blank
+          else:
+            - lvgl.page.show: page_main

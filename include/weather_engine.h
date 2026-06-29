@@ -1,9 +1,11 @@
 #pragma once
 #include "esphome.h"
 #include "lvgl.h"
+#include "esp_system.h"
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
+#include <cstdio>
 
 namespace weather {
 
@@ -31,39 +33,54 @@ static const Star NIGHT_STARS[24] = {
   {94, 22, 11, 4, true},  {102, 50, 15, 1, false},{112, 40, 13, 6, false},{122, 12, 19, 0, false}
 };
 
-class Engine {
+class DrawingUtils {
  public:
-  Particle particles[16];
-
-  Engine() {
-    float init_x[16] = {5.0f, 13.0f, 21.0f, 29.0f, 37.0f, 45.0f, 53.0f, 61.0f,
-                       69.0f, 77.0f, 85.0f, 93.0f, 101.0f, 109.0f, 117.0f, 123.0f};
-    float init_y[16] = {0.0f, 12.0f, 24.0f, 36.0f, 48.0f, 8.0f, 20.0f, 32.0f,
-                       44.0f, 4.0f, 16.0f, 28.0f, 40.0f, 52.0f, 10.0f, 30.0f};
-    for (int i = 0; i < 16; i++) {
-      particles[i] = {init_x[i], init_y[i], 1, 5};
-    }
+  static void draw_rect(lv_layer_t *layer, int x, int y, int w, int h, int radius, bool is_white) {
+    lv_draw_rect_dsc_t dsc;
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_color = is_white ? lv_color_make(255, 255, 255) : lv_color_make(0, 0, 0);
+    dsc.radius = radius;
+    lv_area_t area = {x, y, x + w - 1, y + h - 1};
+    lv_draw_rect(layer, &dsc, &area);
   }
 
-  void update(int step, int mode, float &cloud_x, float &cloud2_x, int &lightning_flash, float &lightning_x, bool &meteor_active, float &meteor_x, float &meteor_y) {
-    if (mode == 3 || mode == 4 || mode == 7) {
-      cloud_x += 0.5f;
-      if (cloud_x > 130.0f) cloud_x = -35.0f;
-      cloud2_x += 0.25f;
-      if (cloud2_x > 130.0f) cloud2_x = -45.0f;
-    }
+  static void draw_arc(lv_layer_t *layer, int cx, int cy, int radius, int start_angle, int end_angle, int width, bool is_white) {
+    lv_draw_arc_dsc_t dsc;
+    lv_draw_arc_dsc_init(&dsc);
+    dsc.color = is_white ? lv_color_make(255, 255, 255) : lv_color_make(0, 0, 0);
+    dsc.width = width;
+    dsc.center.x = cx;
+    dsc.center.y = cy;
+    dsc.radius = radius;
+    dsc.start_angle = start_angle;
+    dsc.end_angle = end_angle;
+    lv_draw_arc(layer, &dsc);
+  }
 
-    if (mode == 7) {
-      if (lightning_flash > 0) {
-        lightning_flash--;
-      } else if ((step % 280) == 0 || (rand() % 350 == 0)) {
-        lightning_flash = 2; // Extremely short flash (~60ms), very rare
-        lightning_x = 25.0f + (rand() % 75);
-      }
-    } else {
-      lightning_flash = 0;
-    }
+  static void draw_circle(lv_layer_t *layer, int cx, int cy, int radius, bool is_white) {
+    draw_arc(layer, cx, cy, radius, 0, 360, radius, is_white);
+  }
 
+  static void draw_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, bool is_white) {
+    lv_draw_line_dsc_t dsc;
+    lv_draw_line_dsc_init(&dsc);
+    dsc.color = is_white ? lv_color_make(255, 255, 255) : lv_color_make(0, 0, 0);
+    dsc.width = 1;
+    dsc.p1.x = x1;
+    dsc.p1.y = y1;
+    dsc.p2.x = x2;
+    dsc.p2.y = y2;
+    lv_draw_line(layer, &dsc);
+  }
+};
+
+class CelestialRenderer {
+ public:
+  bool meteor_active = false;
+  float meteor_x = 0.0f;
+  float meteor_y = 0.0f;
+
+  void update(uint32_t step, int mode) {
     if (mode == 2) {
       if (!meteor_active && (step % 90 == 0 || rand() % 110 == 0)) {
         meteor_active = true;
@@ -78,7 +95,153 @@ class Engine {
         }
       }
     }
+  }
 
+  void render_sun(lv_layer_t *layer, uint32_t step) const {
+    int scx = 112, scy = 16;
+    for (int i = 0; i < 8; i++) {
+      float angle = step * 0.04f + i * (M_PI / 4.0f);
+      float r1 = 9.0f + sinf(step * 0.15f + i) * 0.8f;
+      float r2 = 13.5f + cosf(step * 0.2f + i * 1.5f) * 1.5f;
+      int x1 = (int)roundf(scx + cosf(angle) * r1);
+      int y1 = (int)roundf(scy + sinf(angle) * r1);
+      int x2 = (int)roundf(scx + cosf(angle) * r2);
+      int y2 = (int)roundf(scy + sinf(angle) * r2);
+      DrawingUtils::draw_line(layer, x1, y1, x2, y2, true);
+    }
+
+    DrawingUtils::draw_circle(layer, scx, scy, 7, true);
+
+    float rot_angle = sinf(step * 0.08f) * 0.5236f;
+    int rot_deg = (int)(sinf(step * 0.08f) * 30.0f);
+
+    float lx_rel = -3.5f * cosf(rot_angle) - (-2.5f) * sinf(rot_angle);
+    float ly_rel = -3.5f * sinf(rot_angle) + (-2.5f) * cosf(rot_angle);
+    int lex = (int)roundf(scx + lx_rel);
+    int ley = (int)roundf(scy + ly_rel);
+
+    float rx_rel = 3.5f * cosf(rot_angle) - (-2.5f) * sinf(rot_angle);
+    float ry_rel = 3.5f * sinf(rot_angle) + (-2.5f) * cosf(rot_angle);
+    int rex = (int)roundf(scx + rx_rel);
+    int rey = (int)roundf(scy + ry_rel);
+
+    float mx_rel = 0.0f * cosf(rot_angle) - 1.0f * sinf(rot_angle);
+    float my_rel = 0.0f * sinf(rot_angle) + 1.0f * cosf(rot_angle);
+    int mcx = (int)roundf(scx + mx_rel);
+    int mcy = (int)roundf(scy + my_rel);
+
+    DrawingUtils::draw_rect(layer, lex - 1, ley - 2, 3, 4, 1, false);
+    DrawingUtils::draw_rect(layer, rex - 1, rey - 2, 3, 4, 1, false);
+    DrawingUtils::draw_rect(layer, lex, ley - 2, 1, 2, 0, true);
+    DrawingUtils::draw_rect(layer, rex, rey - 2, 1, 2, 0, true);
+
+    DrawingUtils::draw_arc(layer, mcx, mcy, 5, 20 + rot_deg, 160 + rot_deg, 2, false);
+  }
+
+  void render_moon(lv_layer_t *layer, uint32_t step) const {
+    // Positioned slightly off-center to the right (x = 72) between temp labels and clock
+    int mcx = 72, mcy = 16;
+    DrawingUtils::draw_arc(layer, mcx, mcy, 9, 100, 260, 1, true);
+    DrawingUtils::draw_circle(layer, mcx, mcy, 8, true);
+    DrawingUtils::draw_circle(layer, mcx + 4, mcy - 4, 7, false); // Crescent cut
+
+    // Subtle crater marks
+    DrawingUtils::draw_rect(layer, mcx - 5, mcy - 2, 1, 1, 0, false);
+    DrawingUtils::draw_rect(layer, mcx - 3, mcy + 2, 2, 1, 0, false);
+    DrawingUtils::draw_rect(layer, mcx - 6, mcy + 2, 1, 1, 0, false);
+
+    for (int i = 0; i < 24; i++) {
+      float twinkle = sinf(step * (6.28318f / NIGHT_STARS[i].freq) + NIGHT_STARS[i].phase);
+      if (twinkle > -0.3f) {
+        if (NIGHT_STARS[i].big && twinkle > 0.4f) {
+          DrawingUtils::draw_rect(layer, NIGHT_STARS[i].x - 1, NIGHT_STARS[i].y, 3, 1, 0, true);
+          DrawingUtils::draw_rect(layer, NIGHT_STARS[i].x, NIGHT_STARS[i].y - 1, 1, 3, 0, true);
+        } else {
+          DrawingUtils::draw_rect(layer, NIGHT_STARS[i].x, NIGHT_STARS[i].y, 1, 1, 0, true);
+        }
+      }
+    }
+
+    if (meteor_active && meteor_x >= -10.0f && meteor_y >= 0.0f) {
+      int mx = (int)meteor_x, my = (int)meteor_y;
+      DrawingUtils::draw_line(layer, mx, my, mx + 8, my - 5, true);
+      DrawingUtils::draw_rect(layer, mx, my, 2, 2, 0, true);
+    }
+  }
+};
+
+class CloudRenderer {
+ public:
+  float cloud_x = -35.0f;
+  float cloud2_x = -75.0f;
+
+  void update(int mode) {
+    if (mode == 3 || mode == 4 || mode == 7) {
+      cloud_x += 0.5f;
+      if (cloud_x > 130.0f) cloud_x = -35.0f;
+      cloud2_x += 0.25f;
+      if (cloud2_x > 130.0f) cloud2_x = -45.0f;
+    }
+  }
+
+  void render(lv_layer_t *layer) const {
+    if (cloud2_x > -30.0f && cloud2_x < 130.0f) {
+      int bx = (int)cloud2_x, by = 2;
+      DrawingUtils::draw_rect(layer, bx, by + 4, 22, 5, 2, true);
+      DrawingUtils::draw_circle(layer, bx + 5, by + 4, 4, true);
+      DrawingUtils::draw_circle(layer, bx + 11, by + 3, 5, true);
+      DrawingUtils::draw_circle(layer, bx + 17, by + 4, 4, true);
+    }
+
+    if (cloud_x > -35.0f && cloud_x < 130.0f) {
+      int cx = (int)cloud_x, cy = 6;
+      DrawingUtils::draw_rect(layer, cx, cy + 6, 32, 7, 3, true);
+      DrawingUtils::draw_circle(layer, cx + 6, cy + 6, 6, true);
+      DrawingUtils::draw_circle(layer, cx + 14, cy + 4, 8, true);
+      DrawingUtils::draw_circle(layer, cx + 22, cy + 5, 7, true);
+      DrawingUtils::draw_circle(layer, cx + 27, cy + 7, 5, true);
+    }
+  }
+};
+
+class FogRenderer {
+ public:
+  void render(lv_layer_t *layer, uint32_t step) const {
+    // Clean horizontal vector fog strands flowing across lower screen
+    static const int FOG_YS[4] = {38, 43, 48, 52};
+    static const int FOG_LENS[4] = {36, 48, 30, 42};
+    for (int i = 0; i < 4; i++) {
+      float speed = 1.2f + i * 0.4f;
+      float head_x = fmodf(step * speed + i * 35.0f, 180.0f) - 40.0f;
+      int y_wave = (int)roundf(sinf(step * 0.06f + i * 1.2f) * 1.5f);
+      int fy = FOG_YS[i] + y_wave;
+      int fx1 = (int)head_x;
+      int fx2 = fx1 + FOG_LENS[i];
+      
+      int draw_x1 = std::max(0, std::min(127, fx1));
+      int draw_x2 = std::max(0, std::min(127, fx2));
+      if (draw_x2 > draw_x1) {
+        DrawingUtils::draw_line(layer, draw_x1, fy, draw_x2, fy, true);
+      }
+    }
+  }
+};
+
+class PrecipitationRenderer {
+ public:
+  Particle particles[16];
+
+  PrecipitationRenderer() {
+    float init_x[16] = {5.0f, 13.0f, 21.0f, 29.0f, 37.0f, 45.0f, 53.0f, 61.0f,
+                       69.0f, 77.0f, 85.0f, 93.0f, 101.0f, 109.0f, 117.0f, 123.0f};
+    float init_y[16] = {0.0f, 12.0f, 24.0f, 36.0f, 48.0f, 8.0f, 20.0f, 32.0f,
+                       44.0f, 4.0f, 16.0f, 28.0f, 40.0f, 52.0f, 10.0f, 30.0f};
+    for (int i = 0; i < 16; i++) {
+      particles[i] = {init_x[i], init_y[i], 1, 5};
+    }
+  }
+
+  void update(uint32_t step, int mode) {
     auto update_p = [&](int idx, float vx, float vy, int w, int h, int reset_type) {
       Particle &p = particles[idx - 1];
       p.x += vx;
@@ -120,194 +283,14 @@ class Engine {
     }
   }
 
-  int get_px(int i) const { return std::max(0, std::min(127, (int)particles[i].x)); }
-  int get_py(int i) const { return std::max(0, std::min(63, (int)particles[i].y)); }
-  int get_pw(int i) const { return particles[i].w; }
-  int get_ph(int i) const { return particles[i].h; }
-
-  void render(lv_obj_t *canvas_obj, int step, int mode, float cloud_x, float cloud2_x, int lightning_flash, float lightning_x, bool meteor_active, float meteor_x, float meteor_y) {
-    if (!canvas_obj) return;
-
-    lv_layer_t layer;
-    lv_canvas_init_layer(canvas_obj, &layer);
-
-    // Dithered Soft Lightning Flash (Mode 7)
-    if (mode == 7 && lightning_flash == 2) {
-      for (int y = 0; y < 64; y += 2) {
-        draw_line(&layer, 0, y, 127, y, true);
-      }
-    } else {
-      lv_canvas_fill_bg(canvas_obj, lv_color_make(0, 0, 0), LV_OPA_TRANSP);
-    }
-
-    if (mode == 1 || mode == 4) {
-      render_sun(&layer, step);
-    }
-
-    if (mode == 2) {
-      render_moon(&layer, step, meteor_active, meteor_x, meteor_y);
-    }
-
-    if (mode == 3 || mode == 4 || mode == 7) {
-      render_clouds(&layer, cloud_x, cloud2_x);
-    }
-
-    if (mode == 7 && lightning_flash > 0) {
-      render_lightning(&layer, lightning_x);
-    }
-
-    if (mode >= 5 || mode == 1 || mode == 4) {
-      render_particles(&layer, step, mode);
-    }
-
-    render_grass(&layer, step, mode);
-
-    lv_canvas_finish_layer(canvas_obj, &layer);
-  }
-
- private:
-  void draw_rect(lv_layer_t *layer, int x, int y, int w, int h, int radius, bool is_white) const {
-    lv_draw_rect_dsc_t dsc;
-    lv_draw_rect_dsc_init(&dsc);
-    dsc.bg_color = is_white ? lv_color_make(255, 255, 255) : lv_color_make(0, 0, 0);
-    dsc.radius = radius;
-    lv_area_t area = {x, y, x + w - 1, y + h - 1};
-    lv_draw_rect(layer, &dsc, &area);
-  }
-
-  void draw_arc(lv_layer_t *layer, int cx, int cy, int radius, int start_angle, int end_angle, int width, bool is_white) const {
-    lv_draw_arc_dsc_t dsc;
-    lv_draw_arc_dsc_init(&dsc);
-    dsc.color = is_white ? lv_color_make(255, 255, 255) : lv_color_make(0, 0, 0);
-    dsc.width = width;
-    dsc.center.x = cx;
-    dsc.center.y = cy;
-    dsc.radius = radius;
-    dsc.start_angle = start_angle;
-    dsc.end_angle = end_angle;
-    lv_draw_arc(layer, &dsc);
-  }
-
-  void draw_circle(lv_layer_t *layer, int cx, int cy, int radius, bool is_white) const {
-    draw_arc(layer, cx, cy, radius, 0, 360, radius, is_white);
-  }
-
-  void draw_line(lv_layer_t *layer, int x1, int y1, int x2, int y2, bool is_white) const {
-    lv_draw_line_dsc_t dsc;
-    lv_draw_line_dsc_init(&dsc);
-    dsc.color = is_white ? lv_color_make(255, 255, 255) : lv_color_make(0, 0, 0);
-    dsc.width = 1;
-    dsc.p1.x = x1;
-    dsc.p1.y = y1;
-    dsc.p2.x = x2;
-    dsc.p2.y = y2;
-    lv_draw_line(layer, &dsc);
-  }
-
-  void render_sun(lv_layer_t *layer, int step) const {
-    int scx = 112, scy = 16;
-    for (int i = 0; i < 8; i++) {
-      float angle = step * 0.04f + i * (M_PI / 4.0f);
-      float r1 = 9.0f + sinf(step * 0.15f + i) * 0.8f;
-      float r2 = 13.5f + cosf(step * 0.2f + i * 1.5f) * 1.5f;
-      int x1 = (int)roundf(scx + cosf(angle) * r1);
-      int y1 = (int)roundf(scy + sinf(angle) * r1);
-      int x2 = (int)roundf(scx + cosf(angle) * r2);
-      int y2 = (int)roundf(scy + sinf(angle) * r2);
-      draw_line(layer, x1, y1, x2, y2, true);
-    }
-
-    draw_circle(layer, scx, scy, 7, true);
-
-    float rot_angle = sinf(step * 0.08f) * 0.5236f;
-    int rot_deg = (int)(sinf(step * 0.08f) * 30.0f);
-
-    float lx_rel = -3.5f * cosf(rot_angle) - (-2.5f) * sinf(rot_angle);
-    float ly_rel = -3.5f * sinf(rot_angle) + (-2.5f) * cosf(rot_angle);
-    int lex = (int)roundf(scx + lx_rel);
-    int ley = (int)roundf(scy + ly_rel);
-
-    float rx_rel = 3.5f * cosf(rot_angle) - (-2.5f) * sinf(rot_angle);
-    float ry_rel = 3.5f * sinf(rot_angle) + (-2.5f) * cosf(rot_angle);
-    int rex = (int)roundf(scx + rx_rel);
-    int rey = (int)roundf(scy + ry_rel);
-
-    float mx_rel = 0.0f * cosf(rot_angle) - 1.0f * sinf(rot_angle);
-    float my_rel = 0.0f * sinf(rot_angle) + 1.0f * cosf(rot_angle);
-    int mcx = (int)roundf(scx + mx_rel);
-    int mcy = (int)roundf(scy + my_rel);
-
-    draw_rect(layer, lex - 1, ley - 2, 3, 4, 1, false);
-    draw_rect(layer, rex - 1, rey - 2, 3, 4, 1, false);
-    draw_rect(layer, lex, ley - 2, 1, 2, 0, true);
-    draw_rect(layer, rex, rey - 2, 1, 2, 0, true);
-
-    draw_arc(layer, mcx, mcy, 5, 20 + rot_deg, 160 + rot_deg, 2, false);
-  }
-
-  void render_moon(lv_layer_t *layer, int step, bool meteor_active, float meteor_x, float meteor_y) const {
-    draw_arc(layer, 112, 16, 9, 100, 260, 1, true);
-    draw_circle(layer, 112, 16, 8, true);
-    draw_circle(layer, 116, 12, 7, false);
-
-    draw_rect(layer, 107, 14, 1, 1, 0, false);
-    draw_rect(layer, 109, 18, 2, 1, 0, false);
-    draw_rect(layer, 106, 18, 1, 1, 0, false);
-
-    for (int i = 0; i < 24; i++) {
-      float twinkle = sinf(step * (6.28318f / NIGHT_STARS[i].freq) + NIGHT_STARS[i].phase);
-      if (twinkle > -0.3f) {
-        if (NIGHT_STARS[i].big && twinkle > 0.4f) {
-          draw_rect(layer, NIGHT_STARS[i].x - 1, NIGHT_STARS[i].y, 3, 1, 0, true);
-          draw_rect(layer, NIGHT_STARS[i].x, NIGHT_STARS[i].y - 1, 1, 3, 0, true);
-        } else {
-          draw_rect(layer, NIGHT_STARS[i].x, NIGHT_STARS[i].y, 1, 1, 0, true);
-        }
-      }
-    }
-
-    if (meteor_active && meteor_x >= -10.0f && meteor_y >= 0.0f) {
-      int mx = (int)meteor_x, my = (int)meteor_y;
-      draw_line(layer, mx, my, mx + 8, my - 5, true);
-      draw_rect(layer, mx, my, 2, 2, 0, true);
-    }
-  }
-
-  void render_clouds(lv_layer_t *layer, float cloud_x, float cloud2_x) const {
-    if (cloud2_x > -30.0f && cloud2_x < 130.0f) {
-      int bx = (int)cloud2_x, by = 2;
-      draw_rect(layer, bx, by + 4, 22, 5, 2, true);
-      draw_circle(layer, bx + 5, by + 4, 4, true);
-      draw_circle(layer, bx + 11, by + 3, 5, true);
-      draw_circle(layer, bx + 17, by + 4, 4, true);
-    }
-
-    if (cloud_x > -35.0f && cloud_x < 130.0f) {
-      int cx = (int)cloud_x, cy = 6;
-      draw_rect(layer, cx, cy + 6, 32, 7, 3, true);
-      draw_circle(layer, cx + 6, cy + 6, 6, true);
-      draw_circle(layer, cx + 14, cy + 4, 8, true);
-      draw_circle(layer, cx + 22, cy + 5, 7, true);
-      draw_circle(layer, cx + 27, cy + 7, 5, true);
-    }
-  }
-
-  void render_lightning(lv_layer_t *layer, float lightning_x) const {
-    int lx = std::max(10, std::min(115, (int)lightning_x));
-    draw_line(layer, lx, 12, lx + 4, 24, true);
-    draw_line(layer, lx + 4, 24, lx - 2, 38, true);
-    draw_line(layer, lx - 2, 38, lx + 5, 54, true);
-    draw_line(layer, lx + 4, 24, lx + 10, 34, true);
-    draw_line(layer, lx - 2, 38, lx - 7, 46, true);
-  }
-
-  void render_particles(lv_layer_t *layer, int step, int mode) const {
+  void render(lv_layer_t *layer, uint32_t step, int mode) const {
     for (int i = 0; i < 16; i++) {
-      int px = get_px(i), py = get_py(i);
+      int px = std::max(0, std::min(127, (int)particles[i].x));
+      int py = std::max(0, std::min(63, (int)particles[i].y));
+
       if (mode == 5 || mode == 7) {
         int dy = (mode == 7) ? 9 : 8;
         int num_steps = (mode == 7) ? 3 : 2;
-        
         int row = 0;
         while (row < dy) {
           int step_offset = (row * num_steps) / dy;
@@ -318,38 +301,82 @@ class Engine {
           }
           int run_len = row - start_row;
           int start_y = py + start_row;
-          draw_rect(layer, start_x, start_y, 1, run_len, 0, true);
+          DrawingUtils::draw_rect(layer, start_x, start_y, 1, run_len, 0, true);
         }
-
         if (py + dy >= 56) {
           int splash_x = px + num_steps;
-          draw_rect(layer, splash_x - 1, 62, 3, 1, 0, true);
+          DrawingUtils::draw_rect(layer, splash_x - 1, 62, 3, 1, 0, true);
         }
       } else {
-        int pw = get_pw(i), ph = get_ph(i);
-        draw_rect(layer, px, py, pw, ph, 0, true);
+        DrawingUtils::draw_rect(layer, px, py, particles[i].w, particles[i].h, 0, true);
       }
     }
   }
+};
 
-  void render_grass(lv_layer_t *layer, int step, int mode) const {
-    float sway_mag = (mode == 8) ? 5.0f : ((mode == 5 || mode == 7) ? 3.0f : 1.8f);
-    float wind_speed = (mode == 8) ? 0.14f : ((mode == 5 || mode == 7) ? 0.09f : 0.06f);
+class LightningRenderer {
+ public:
+  int lightning_flash = 0;
+  float lightning_x = 64.0f;
+
+  void update(uint32_t step, int mode) {
+    if (mode == 7) {
+      if (lightning_flash > 0) {
+        lightning_flash--;
+      } else if ((step % 280) == 0 || (rand() % 350 == 0)) {
+        lightning_flash = 2; // ~60ms flash
+        lightning_x = 25.0f + (rand() % 75);
+      }
+    } else {
+      lightning_flash = 0;
+    }
+  }
+
+  void render(lv_layer_t *layer) const {
+    if (lightning_flash > 0) {
+      int lx = std::max(10, std::min(115, (int)lightning_x));
+      DrawingUtils::draw_line(layer, lx, 12, lx + 4, 24, true);
+      DrawingUtils::draw_line(layer, lx + 4, 24, lx - 2, 38, true);
+      DrawingUtils::draw_line(layer, lx - 2, 38, lx + 5, 54, true);
+      DrawingUtils::draw_line(layer, lx + 4, 24, lx + 10, 34, true);
+      DrawingUtils::draw_line(layer, lx - 2, 38, lx - 7, 46, true);
+    }
+  }
+};
+
+class GrassRenderer {
+ public:
+  void render(lv_layer_t *layer, uint32_t step, int mode, float gust_impulse) const {
+    // In Snowy mode (Mode 6), draw solid thicker snow bank baseline across bottom
+    if (mode == 6) {
+      // Full horizontal 2-px thick baseline for snow bank
+      DrawingUtils::draw_rect(layer, 0, 62, 128, 2, 0, true);
+      for (int x = 0; x < 128; x += 3) {
+        int drift_h = 1 + (int)(sinf(x * 0.12f + step * 0.03f) * 1.2f + 1.2f);
+        DrawingUtils::draw_rect(layer, x, 62 - drift_h, 3, drift_h, 0, true);
+      }
+      return;
+    }
+
+    // Grass height strictly 3 to 9 px per user request
+    float sway_mag = (mode == 8) ? 6.0f : ((mode == 7) ? 7.5f : ((mode == 5) ? 3.5f : 2.0f));
+    float wind_speed = (mode == 8) ? 0.16f : ((mode == 7) ? 0.22f : ((mode == 5) ? 0.10f : 0.06f));
     float spatial_freq = 0.08f;
-    float wind_bias = (mode == 8) ? 2.0f : 0.5f;
-    float gust_env = 1.0f + 0.25f * sinf(step * 0.025f);
+    float wind_bias = (mode == 8) ? 2.5f : ((mode == 7) ? 3.0f : 0.5f);
+    float gust_env = 1.0f + 0.3f * sinf(step * 0.03f);
 
     for (int g = 0; g < 28; g++) {
       int gx = 2 + g * 4 + ((g * 7) % 3);
       if (gx < 0 || gx >= 128) continue;
 
-      int h = 7 + ((g * 11 + 3) % 5);
+      // Height formula bound strictly between 3 and 9 px
+      int h = 3 + ((g * 11 + 3) % 7);
       
       float wave1 = sinf(step * wind_speed - gx * spatial_freq);
       float wave2 = sinf(step * wind_speed * 1.6f - gx * spatial_freq * 1.3f + 1.5f) * 0.35f;
       float total_wave = (wave1 + wave2) * gust_env;
       
-      float sway_float = total_wave * sway_mag + wind_bias;
+      float sway_float = total_wave * sway_mag + wind_bias + gust_impulse;
       int sway = (int)roundf(sway_float);
 
       int x_pos[16];
@@ -367,16 +394,70 @@ class Engine {
         }
         int run_len = k - start_k;
         int top_y = 63 - (k - 1);
-        draw_rect(layer, start_x, top_y, 1, run_len, 0, true);
+        DrawingUtils::draw_rect(layer, start_x, top_y, 1, run_len, 0, true);
       }
 
-      if (g % 3 == 1 || g % 7 == 0) {
+      if ((g % 4 == 1 || g % 7 == 0) && mode != 7) {
         int tip_x = x_pos[h];
         int tip_y = 63 - h;
-        draw_rect(layer, tip_x - 1, tip_y - 1, 3, 1, 0, true);
-        draw_rect(layer, tip_x, tip_y - 2, 1, 1, 0, true);
+        DrawingUtils::draw_rect(layer, tip_x - 1, tip_y - 1, 3, 1, 0, true);
+        DrawingUtils::draw_rect(layer, tip_x, tip_y - 2, 1, 1, 0, true);
       }
     }
+  }
+};
+
+class Engine {
+ private:
+  float gust_impulse = 0.0f;
+
+  CelestialRenderer celestial;
+  CloudRenderer clouds;
+  FogRenderer fog;
+  PrecipitationRenderer precipitation;
+  LightningRenderer lightning;
+  GrassRenderer grass;
+
+ public:
+  void trigger_gust(float impulse) {
+    gust_impulse += impulse;
+    if (gust_impulse > 14.0f) gust_impulse = 14.0f;
+    if (gust_impulse < -14.0f) gust_impulse = -14.0f;
+  }
+
+  void update(uint32_t step, int mode) {
+    gust_impulse *= 0.91f;
+
+    celestial.update(step, mode);
+    clouds.update(mode);
+    precipitation.update(step, mode);
+    lightning.update(step, mode);
+  }
+
+  void render(lv_obj_t *canvas_obj, uint32_t step, int mode) {
+    if (!canvas_obj) return;
+
+    lv_layer_t layer;
+    lv_canvas_init_layer(canvas_obj, &layer);
+
+    // Dithered Soft Lightning Flash (Mode 7)
+    if (mode == 7 && lightning.lightning_flash == 2) {
+      for (int y = 0; y < 64; y += 2) {
+        DrawingUtils::draw_line(&layer, 0, y, 127, y, true);
+      }
+    } else {
+      lv_canvas_fill_bg(canvas_obj, lv_color_make(0, 0, 0), LV_OPA_TRANSP);
+    }
+
+    if (mode == 1 || mode == 4) celestial.render_sun(&layer, step);
+    if (mode == 2) celestial.render_moon(&layer, step);
+    if (mode == 3 || mode == 4 || mode == 7) clouds.render(&layer);
+    if (mode == 8) fog.render(&layer, step);
+    if (mode == 7 && lightning.lightning_flash > 0) lightning.render(&layer);
+    if (mode >= 5 || mode == 1 || mode == 4 || mode == 8) precipitation.render(&layer, step, mode);
+    grass.render(&layer, step, mode, gust_impulse);
+
+    lv_canvas_finish_layer(canvas_obj, &layer);
   }
 };
 
